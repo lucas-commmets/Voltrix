@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Reflex Arena</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#0a0c14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Reflex Arena">
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at 50% 0%, #12151f, #05060a);
+    font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+    color: #e8ecf4;
+    user-select: none;
+    padding: 12px;
+    box-sizing: border-box;
+  }
+  h1 {
+    margin: 10px 0 2px;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: #eef1f8;
+    text-align: center;
+  }
+  h1 span { color: #4dd6ff; text-shadow: 0 0 16px rgba(77,214,255,0.6); }
+  #sub { font-size: 12px; color: #6b7488; margin-bottom: 14px; letter-spacing: 1px; text-align: center; }
+
+  #panel { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; justify-content: center; }
+  .stat {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 8px 18px;
+    text-align: center;
+    min-width: 74px;
+  }
+  .stat .label { font-size: 10px; color: #6b7488; letter-spacing: 1px; text-transform: uppercase; }
+  .stat .value { font-size: 20px; font-weight: 600; margin-top: 2px; color: #fff; }
+  .stat.best .value { color: #4dd6ff; }
+  .stat.lives .value { color: #ff5a7a; }
+
+  #wrap {
+    position: relative;
+    border-radius: 18px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.7), inset 0 0 0 1px rgba(255,255,255,0.02);
+    width: 100%;
+    max-width: 640px;
+  }
+  canvas {
+    display: block;
+    cursor: crosshair;
+    background: #0a0c14;
+    width: 100%;
+    height: auto;
+    touch-action: none;
+  }
+
+  #overlay {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(5,6,10,0.72);
+    backdrop-filter: blur(2px);
+  }
+  #overlay.hidden { display: none; }
+  .card {
+    text-align: center;
+    padding: 28px 40px;
+    border-radius: 16px;
+    background: rgba(20,22,32,0.9);
+    border: 1px solid rgba(77,214,255,0.25);
+  }
+  .card h2 { margin: 0 0 8px; font-size: 20px; font-weight: 600; color: #fff; }
+  .card p { margin: 4px 0; font-size: 13px; color: #9aa2b5; }
+  .card .go {
+    margin-top: 16px;
+    padding: 10px 28px;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    background: linear-gradient(135deg, #4dd6ff, #2f9dd9);
+    border: none;
+    border-radius: 8px;
+    color: #05060a;
+    cursor: pointer;
+  }
+  .card .go:hover { filter: brightness(1.1); }
+
+  #controls { margin-top: 10px; font-size: 12px; color: #6b7488; text-align: center; letter-spacing: 0.5px; padding: 0 8px; }
+  #controls b { color: #4dd6ff; }
+
+  @media (max-width: 480px) {
+    h1 { font-size: 18px; letter-spacing: 2px; }
+    #sub { font-size: 11px; }
+    .stat { padding: 6px 12px; min-width: 64px; }
+    .stat .value { font-size: 17px; }
+    .card { padding: 22px 22px; max-width: 88vw; }
+    .card h2 { font-size: 18px; }
+    .card p { font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+  <h1>Reflex <span>Arena</span></h1>
+  <div id="sub">react instantly — one mistake ends it</div>
+
+  <div id="panel">
+    <div class="stat"><div class="label">Score</div><div class="value" id="scoreVal">0</div></div>
+    <div class="stat best"><div class="label">Best</div><div class="value" id="bestVal">0</div></div>
+    <div class="stat lives"><div class="label">Lives</div><div class="value" id="livesVal">♥</div></div>
+  </div>
+
+  <div id="wrap">
+    <canvas id="game" width="640" height="440"></canvas>
+    <div id="overlay">
+      <div class="card">
+        <h2 id="cardTitle">Ready</h2>
+        <p id="cardText">Blue ball → click it. Red ball → click anywhere else.<br>Boxes → click the color you're told. One mistake ends the run.</p>
+        <button class="go" id="goBtn">Start</button>
+      </div>
+    </div>
+  </div>
+  <div id="controls">hardcore mode &nbsp;·&nbsp; <b>1 life</b> &nbsp;·&nbsp; it gets faster as your score climbs</div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+const overlay = document.getElementById('overlay');
+const cardTitle = document.getElementById('cardTitle');
+const cardText = document.getElementById('cardText');
+const goBtn = document.getElementById('goBtn');
+const scoreVal = document.getElementById('scoreVal');
+const bestVal = document.getElementById('bestVal');
+const livesVal = document.getElementById('livesVal');
+
+let audioCtx = null;
+function tone(freq, dur, type='sine', vol=0.1) {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.value = vol;
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start();
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    o.stop(audioCtx.currentTime + dur);
+  } catch(e) {}
+}
+
+const COLORS = {
+  blue:   '#4dd6ff',
+  red:    '#ff5a5a',
+  yellow: '#ffd166',
+  purple: '#b784ff',
+  green:  '#5cd97a',
+  orange: '#ff9a4d',
+  cyan:   '#4dffe0',
+  pink:   '#ff7ab8',
+};
+const BOX_POOL = ['blue','yellow','purple','green','orange','cyan','pink'];
+
+let score = 0, best = 0, lives = 1;
+let state = 'idle'; // idle | active | resolving | gameover
+let challenge = null;
+let particles = [];
+let flashAlpha = 0;
+let shakeT = 0;
+let ripple = null;
+
+function fmtHearts(n) { return '♥'.repeat(Math.max(n,0)) || '–'; }
+
+function updateHud() {
+  scoreVal.textContent = score;
+  bestVal.textContent = best;
+  livesVal.textContent = fmtHearts(lives);
+}
+
+function timeLimitFor(s) {
+  return Math.max(550, 1500 - s * 35);
+}
+
+function spawnChallenge() {
+  const type = Math.random() < 0.5 ? 'ball' : 'boxes';
+  const limit = timeLimitFor(score);
+  const startT = performance.now();
+
+  if (type === 'ball') {
+    const isGo = Math.random() < 0.5; // true = blue (click it), false = red (don't click)
+    const r = 30;
+    const x = r + 20 + Math.random() * (W - 2*(r+20));
+    const y = r + 20 + Math.random() * (H - 2*(r+20));
+    challenge = { type, isGo, x, y, r, startT, limit };
+  } else {
+    const n = 6;
+    const shuffled = [...BOX_POOL].sort(() => Math.random()-0.5).slice(0, n);
+    const target = shuffled[Math.floor(Math.random()*n)];
+    const boxSize = 64;
+    const cols = 3, rows = 2;
+    const marginX = 60, marginY = 70;
+    const cellW = (W - marginX*2) / cols;
+    const cellH = (H - marginY*2 - 30) / rows;
+    const boxes = shuffled.map((color, i) => {
+      const col = i % cols, row = Math.floor(i / cols);
+      const cx = marginX + cellW*col + cellW/2;
+      const cy = marginY + 30 + cellH*row + cellH/2;
+      return { color, x: cx - boxSize/2, y: cy - boxSize/2, size: boxSize };
+    });
+    challenge = { type, target, boxes, startT, limit };
+  }
+  state = 'active';
+}
+
+function endGame() {
+  state = 'gameover';
+  challenge = null;
+  if (score > best) best = score;
+  tone(140, 0.4, 'sawtooth', 0.14);
+  shakeT = 16;
+  cardTitle.textContent = 'Run over';
+  cardText.innerHTML = `Final score: <b style="color:#4dd6ff">${score}</b>${score>=best && score>0 ? '<br>new best!' : ''}`;
+  goBtn.textContent = 'Try again';
+  updateHud();
+  overlay.classList.remove('hidden');
+}
+
+function succeed() {
+  score++;
+  flashAlpha = 0.5;
+  const cx = challenge && challenge.type === 'ball' ? challenge.x : W/2;
+  const cy = challenge && challenge.type === 'ball' ? challenge.y : H/2;
+  ripple = { x: cx, y: cy, r: 20, t: 0 };
+  tone(760 + Math.min(score,20)*15, 0.08, 'triangle', 0.1);
+  for (let i=0;i<12;i++) {
+    const a = Math.random()*Math.PI*2, sp = 1+Math.random()*3;
+    particles.push({ x: cx, y: cy, vx: Math.cos(a)*sp, vy: Math.sin(a)*sp, life: 24, r: 2+Math.random()*2 });
+  }
+  state = 'resolving';
+  updateHud();
+  setTimeout(() => { if (state !== 'gameover') spawnChallenge(); }, 140);
+}
+
+function fail() {
+  lives--;
+  updateHud();
+  if (lives <= 0) {
+    endGame();
+  } else {
+    state = 'resolving';
+    setTimeout(() => { if (state !== 'gameover') spawnChallenge(); }, 300);
+  }
+}
+
+function handleClick(mx, my) {
+  if (state === 'idle' || state === 'gameover' || state === 'resolving' || !challenge) return;
+
+  if (challenge.type === 'ball') {
+    const dx = mx - challenge.x, dy = my - challenge.y;
+    const onBall = Math.hypot(dx,dy) <= challenge.r + 4;
+    if (challenge.isGo) {
+      onBall ? succeed() : fail();
+    } else {
+      onBall ? fail() : succeed();
+    }
+  } else {
+    let hitBox = null;
+    for (const b of challenge.boxes) {
+      if (mx >= b.x && mx <= b.x+b.size && my >= b.y && my <= b.y+b.size) { hitBox = b; break; }
+    }
+    if (hitBox && hitBox.color === challenge.target) succeed();
+    else fail();
+  }
+}
+
+canvas.addEventListener('mousedown', e => {
+  const rect = canvas.getBoundingClientRect();
+  handleClick((e.clientX-rect.left) * (W/rect.width), (e.clientY-rect.top) * (H/rect.height));
+});
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const t = e.touches[0];
+  handleClick((t.clientX-rect.left) * (W/rect.width), (t.clientY-rect.top) * (H/rect.height));
+}, { passive:false });
+
+goBtn.addEventListener('click', () => {
+  score = 0; lives = 1;
+  updateHud();
+  overlay.classList.add('hidden');
+  spawnChallenge();
+});
+
+function update() {
+  if (state === 'active' && challenge) {
+    const elapsed = performance.now() - challenge.startT;
+    if (elapsed > challenge.limit) {
+      fail();
+    }
+  }
+  for (const p of particles) { p.x+=p.vx; p.y+=p.vy; p.vx*=0.94; p.vy*=0.94; p.life--; }
+  particles = particles.filter(p => p.life > 0);
+  if (flashAlpha > 0) flashAlpha -= 0.03;
+  if (shakeT > 0) shakeT *= 0.8;
+  if (ripple) { ripple.t += 1; if (ripple.t > 22) ripple = null; }
+}
+
+function drawGrid() {
+  ctx.fillStyle = '#0a0c14';
+  ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle = 'rgba(255,255,255,0.035)';
+  ctx.lineWidth = 1;
+  const step = 32;
+  for (let x=0;x<W;x+=step){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+  for (let y=0;y<H;y+=step){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+  const g = ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,W*0.6);
+  g.addColorStop(0, 'rgba(77,214,255,0.06)');
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,W,H);
+}
+
+function drawTimerBar() {
+  if (!challenge || state !== 'active') return;
+  const elapsed = performance.now() - challenge.startT;
+  const frac = Math.max(0, 1 - elapsed / challenge.limit);
+  const barW = W - 40;
+  ctx.fillStyle = 'rgba(255,255,255,0.08)';
+  ctx.fillRect(20, 12, barW, 6);
+  ctx.fillStyle = frac < 0.3 ? '#ff5a5a' : '#4dd6ff';
+  ctx.fillRect(20, 12, barW * frac, 6);
+}
+
+function drawPrompt() {
+  if (!challenge) return;
+  ctx.textAlign = 'center';
+  ctx.font = '600 17px Segoe UI, Arial';
+  if (challenge.type === 'ball') {
+    ctx.fillStyle = challenge.isGo ? '#4dd6ff' : '#ff5a5a';
+    ctx.fillText(challenge.isGo ? 'click the ball' : "don't click — click elsewhere", W/2, 44);
+  } else {
+    ctx.fillStyle = COLORS[challenge.target];
+    ctx.fillText('click ' + challenge.target, W/2, 44);
+  }
+}
+
+function drawBall() {
+  if (!challenge || challenge.type !== 'ball') return;
+  const pulse = 1 + Math.sin(performance.now()*0.014) * 0.05;
+  const r = challenge.r * pulse;
+  const color = challenge.isGo ? COLORS.blue : COLORS.red;
+  const glow = ctx.createRadialGradient(challenge.x,challenge.y,0,challenge.x,challenge.y,r*2.2);
+  glow.addColorStop(0, color + '55');
+  glow.addColorStop(1, color + '00');
+  ctx.fillStyle = glow;
+  ctx.beginPath(); ctx.arc(challenge.x,challenge.y,r*2.2,0,Math.PI*2); ctx.fill();
+
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(challenge.x,challenge.y,r,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(challenge.x,challenge.y,r*0.5,0,Math.PI*2); ctx.stroke();
+}
+
+function drawBoxes() {
+  if (!challenge || challenge.type !== 'boxes') return;
+  for (const b of challenge.boxes) {
+    const color = COLORS[b.color];
+    ctx.save();
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = color;
+    const r = 10;
+    ctx.beginPath();
+    ctx.moveTo(b.x+r, b.y);
+    ctx.arcTo(b.x+b.size, b.y, b.x+b.size, b.y+b.size, r);
+    ctx.arcTo(b.x+b.size, b.y+b.size, b.x, b.y+b.size, r);
+    ctx.arcTo(b.x, b.y+b.size, b.x, b.y, r);
+    ctx.arcTo(b.x, b.y, b.x+b.size, b.y, r);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawRipple() {
+  if (!ripple) return;
+  const p = ripple.t / 22;
+  ctx.strokeStyle = `rgba(77,214,255,${1-p})`;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(ripple.x, ripple.y, ripple.r + p*40, 0, Math.PI*2);
+  ctx.stroke();
+}
+
+function drawParticles() {
+  for (const p of particles) {
+    ctx.globalAlpha = Math.max(0, p.life/24);
+    ctx.fillStyle = '#4dd6ff';
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function draw() {
+  ctx.save();
+  if (shakeT > 0.5) ctx.translate((Math.random()-0.5)*shakeT, (Math.random()-0.5)*shakeT);
+  drawGrid();
+  drawTimerBar();
+  drawPrompt();
+  drawRipple();
+  drawBall();
+  drawBoxes();
+  drawParticles();
+  if (flashAlpha > 0) {
+    ctx.fillStyle = `rgba(77,214,255,${flashAlpha*0.25})`;
+    ctx.fillRect(0,0,W,H);
+  }
+  ctx.restore();
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+updateHud();
+draw();
+loop();
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
