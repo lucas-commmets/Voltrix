@@ -339,19 +339,34 @@ function draw() {
   ctx.shadowBlur = 0;
 
   // Powerups
+// Neon Power-Ups Rendering
   for (const p of powerups) {
-    ctx.fillStyle = p.color;
+    p.pulse += 0.1;
+    const glowRadius = p.r + Math.sin(p.pulse) * 2;
+
+    ctx.save();
+    // Outer Neon Halo Ring
+    ctx.strokeStyle = p.color;
     ctx.shadowColor = p.color;
-    ctx.shadowBlur = 8;
+    ctx.shadowBlur = 16;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, glowRadius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Dark Core Fill
+    ctx.fillStyle = 'rgba(10, 12, 20, 0.9)';
     ctx.beginPath();
     ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = '#05060a';
-    ctx.font = 'bold 10px sans-serif';
+    // Neon Symbol Center
+    ctx.fillStyle = p.color;
+    ctx.font = 'bold 12px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(p.label, p.x, p.y);
+    ctx.fillText(p.label, p.x, p.y + 1);
+    ctx.restore();
   }
   ctx.shadowBlur = 0;
 
