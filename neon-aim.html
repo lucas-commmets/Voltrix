@@ -189,13 +189,14 @@ function draw() {
   ctx.restore();
 }
 
+// 1. Define the loop to update and render frames continuously
 function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// 2. Initialize game state ONCE, then kick off the loop
 reset();
 draw();
 requestAnimationFrame(loop);
-}
-draw();
-requestAnimationFrame(loop);
-</script>
-</body>
-</html>
