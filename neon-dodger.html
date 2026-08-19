@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Storm Dodge</title>
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<meta name="theme-color" content="#0a0c14">
+<link rel="stylesheet" href="style.css">
+<style> :root { --accent: #b784ff; --accent-dim: rgba(183,132,255,0.25); } </style>
+</head>
+<body>
+  <h1>Storm <span>Dodge</span></h1>
+  <a class="backlink" href="index.html">&larr; Voltrix</a>
+
+  <div id="panel">
+    <div class="stat"><div class="label">Time</div><div class="value" id="scoreVal">0.0</div></div>
+    <div class="stat best"><div class="label">Best</div><div class="value" id="bestVal">0.0</div></div>
+  </div>
+
+  <div id="wrap">
+    <canvas id="game" width="440" height="560"></canvas>
+    <div id="overlay">
+      <div class="card">
+        <h2 id="cardTitle">Ready</h2>
+        <p>Move left/right (arrows, A/D, drag, or swipe). Dodge everything falling. One hit ends it.</p>
+        <button class="go" id="goBtn">Start</button>
+      </div>
+    </div>
+  </div>
+  <div id="controls"><b>arrows / A D / drag</b> to move &nbsp;·&nbsp; survive as long as you can</div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+const overlay = document.getElementById('overlay');
+const cardTitle = document.getElementById('cardTitle');
+const goBtn = document.getElementById('goBtn');
+const scoreVal = document.getElementById('scoreVal');
+const bestVal = document.getElementById('bestVal');
+
+let audioCtx = null;
+function tone(freq, dur, type='sine', vol=0.1) {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.value = vol;
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start();
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    o.stop(audioCtx.currentTime + dur);
+  } catch(e) {}
+}
+
+let player, blocks, elapsed, best = 0, state = 'idle', spawnTimer, keys = {}, particles, shakeT = 0;
+
+function reset() {
+  player = { x: W/2, w: 26, h: 26, targetX: W/2 };
+  blocks = [];
+  particles = [];
+  elapsed = 0; spawnTimer = 0;
+  updateHud();
+}
+
+function updateHud() {
+  scoreVal.textContent = elapsed.toFixed(1);
+  bestVal.textContent = best.toFixed(1);
+}
+
+document.addEventListener('keydown', e => {
+  keys[e.key.toLowerCase()] = true;
+  if (['arrowleft','arrowright'].includes(e.key.toLowerCase())) e.preventDefault();
+});
+document.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+let dragging = false;
+function setFromClientX(clientX) {
+  const rect = canvas.getBoundingClientRect();
+  const mx = (clientX-rect.left) * (W/rect.width);
+  player.targetX = Math.max(player.w/2, Math.min(W-player.w/2, mx));
+}
+canvas.addEventListener('mousedown', e => { dragging = true; setFromClientX(e.clientX); });
+window.addEventListener('mousemove', e => { if (dragging) setFromClientX(e.clientX); });
+window.addEventListener('mouseup', () => dragging=false);
+canvas.addEventListener('touchstart', e => { e.preventDefault(); setFromClientX(e.touches[0].clientX); }, {passive:false});
+canvas.addEventListener('touchmove', e => { e.preventDefault(); setFromClientX(e.touches[0].clientX); }, {passive:false});
+
+function spawnBlock() {
+  const w = 24 + Math.random()*50;
+  const x = Math.random() * (W-w);
+  const speed = 2.6 + Math.min(elapsed*0.09, 5);
+  blocks.push({ x, y: -30, w, h: 22, vy: speed, color: pickColor() });
+}
+function pickColor() {
+  const cs = ['#ff5a5a','#ffd166','#4dd6ff','#ff9a4d','#ff7ab8'];
+  return cs[Math.floor(Math.random()*cs.length)];
+}
+
+function startGame() {
+  reset();
+  state = 'play';
+  overlay.classList.add('hidden');
+}
+goBtn.addEventListener('click', startGame);
+
+function endGame() {
+  state = 'over';
+  if (elapsed > best) best = elapsed;
+  updateHud();
+  shakeT = 14;
+  tone(140,0.35,'sawtooth',0.13);
+  cardTitle.textContent = 'Hit!';
+  document.querySelector('.card p').innerHTML = `Survived: <b style="color:#b784ff">${elapsed.toFixed(1)}s</b>`;
+  goBtn.textContent = 'Try again';
+  overlay.classList.remove('hidden');
+}
+
+function update(dt) {
+  if (state !== 'play') return;
+  elapsed += dt;
+  updateHud();
+
+  const moveSpeed = 380;
+  if (keys['arrowleft']||keys['a']) player.targetX -= moveSpeed*dt;
+  if (keys['arrowright']||keys['d']) player.targetX += moveSpeed*dt;
+  player.targetX = Math.max(player.w/2, Math.min(W-player.w/2, player.targetX));
+  player.x += (player.targetX - player.x) * 0.35;
+
+  spawnTimer -= dt;
+  if (spawnTimer <= 0) {
+    spawnBlock();
+    spawnTimer = Math.max(0.16, 0.5 - elapsed*0.006);
+  }
+
+  const pBox = { x: player.x-player.w/2, y: H-50-player.h, w: player.w, h: player.h };
+  for (const b of blocks) {
+    b.y += b.vy;
+    if (b.x < pBox.x+pBox.w && b.x+b.w > pBox.x && b.y < pBox.y+pBox.h && b.y+b.h > pBox.y) {
+      endGame();
+    }
+  }
+  blocks = blocks.filter(b => b.y < H+40);
+
+  for (const p of particles) { p.x+=p.vx; p.y+=p.vy; p.life--; }
+  particles = particles.filter(p=>p.life>0);
+  if (shakeT > 0) shakeT *= 0.85;
+}
+
+function draw() {
+  ctx.save();
+  if (shakeT > 0.3) ctx.translate((Math.random()-0.5)*shakeT, (Math.random()-0.5)*shakeT);
+
+  ctx.fillStyle = '#0a0c14';
+  ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle = 'rgba(183,132,255,0.15)';
+  ctx.lineWidth = 1;
+  for (let x=0;x<W;x+=30){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+
+  for (const b of blocks) {
+    ctx.save();
+    ctx.shadowColor = b.color;
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = b.color;
+    ctx.fillRect(b.x,b.y,b.w,b.h);
+    ctx.restore();
+  }
+
+  const py = H-50-player.h;
+  ctx.save();
+  ctx.shadowColor = '#b784ff';
+  ctx.shadowBlur = 14;
+  ctx.fillStyle = '#b784ff';
+  ctx.beginPath();
+  ctx.arc(player.x, py+player.h/2, player.w/2, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.restore();
+}
+
+let last = performance.now();
+function loop(t) {
+  const dt = Math.min(0.033,(t-last)/1000);
+  last = t;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+reset();
+draw();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

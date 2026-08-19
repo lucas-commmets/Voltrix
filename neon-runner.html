@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Glow Dash</title>
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<meta name="theme-color" content="#0a0c14">
+<link rel="stylesheet" href="style.css">
+<style> :root { --accent: #5cd97a; --accent-dim: rgba(92,217,122,0.25); } </style>
+</head>
+<body>
+  <h1>Glow <span>Dash</span></h1>
+  <a class="backlink" href="index.html">&larr; Voltrix</a>
+
+  <div id="panel">
+    <div class="stat"><div class="label">Score</div><div class="value" id="scoreVal">0</div></div>
+    <div class="stat best"><div class="label">Best</div><div class="value" id="bestVal">0</div></div>
+  </div>
+
+  <div id="wrap">
+    <canvas id="game" width="640" height="360"></canvas>
+    <div id="overlay">
+      <div class="card">
+        <h2 id="cardTitle">Ready</h2>
+        <p>Space/Up or tap top-half to jump. Down arrow or tap bottom-half to duck. One hit ends it.</p>
+        <button class="go" id="goBtn">Start</button>
+      </div>
+    </div>
+  </div>
+  <div id="controls"><b>space/tap</b> jump &nbsp;·&nbsp; <b>down/tap-low</b> duck &nbsp;·&nbsp; speeds up over time</div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+const GROUND_Y = H - 60;
+const GRAVITY = 0.9;
+const JUMP_V = -15.5;
+
+const overlay = document.getElementById('overlay');
+const cardTitle = document.getElementById('cardTitle');
+const goBtn = document.getElementById('goBtn');
+const scoreVal = document.getElementById('scoreVal');
+const bestVal = document.getElementById('bestVal');
+
+let audioCtx = null;
+function tone(freq, dur, type='sine', vol=0.1) {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.value = vol;
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start();
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    o.stop(audioCtx.currentTime + dur);
+  } catch(e) {}
+}
+
+let player, obstacles, score, best = 0, speed, state = 'idle', spawnTimer, particles, distance;
+
+function reset() {
+  player = { x: 90, y: GROUND_Y-38, w: 30, h: 38, vy: 0, onGround: true, ducking: false };
+  obstacles = [];
+  particles = [];
+  score = 0; speed = 5.5; spawnTimer = 0; distance = 0;
+  updateHud();
+}
+
+function updateHud() { scoreVal.textContent = Math.floor(score); bestVal.textContent = best; }
+
+function jump() {
+  if (state !== 'play') return;
+  if (player.onGround && !player.ducking) {
+    player.vy = JUMP_V;
+    player.onGround = false;
+    tone(500,0.09,'square',0.08);
+  }
+}
+function duckStart() { if (state==='play' && player.onGround) player.ducking = true; }
+function duckEnd() { player.ducking = false; }
+
+document.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if ([' ','arrowup','arrowdown'].includes(k)) e.preventDefault();
+  if (k===' '||k==='arrowup') jump();
+  if (k==='arrowdown') duckStart();
+});
+document.addEventListener('keyup', e => {
+  if (e.key.toLowerCase()==='arrowdown') duckEnd();
+});
+canvas.addEventListener('mousedown', e => {
+  const rect = canvas.getBoundingClientRect();
+  const my = (e.clientY-rect.top) * (H/rect.height);
+  if (my > H*0.55) duckStart(); else jump();
+});
+canvas.addEventListener('mouseup', duckEnd);
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const my = (e.touches[0].clientY-rect.top) * (H/rect.height);
+  if (my > H*0.55) duckStart(); else jump();
+}, {passive:false});
+canvas.addEventListener('touchend', e => { e.preventDefault(); duckEnd(); }, {passive:false});
+
+function spawnObstacle() {
+  const type = Math.random() < 0.6 ? 'ground' : 'air';
+  if (type === 'ground') {
+    obstacles.push({ type, x: W+20, y: GROUND_Y-26, w: 22, h: 26 });
+  } else {
+    obstacles.push({ type, x: W+20, y: GROUND_Y-70, w: 46, h: 20 });
+  }
+}
+
+function startGame() {
+  reset();
+  state = 'play';
+  overlay.classList.add('hidden');
+}
+goBtn.addEventListener('click', startGame);
+
+function endGame() {
+  state = 'over';
+  if (score > best) best = Math.floor(score);
+  updateHud();
+  tone(140,0.35,'sawtooth',0.13);
+  cardTitle.textContent = 'Hit!';
+  document.querySelector('.card p').innerHTML = `Score: <b style="color:#5cd97a">${Math.floor(score)}</b>`;
+  goBtn.textContent = 'Try again';
+  overlay.classList.remove('hidden');
+}
+
+function rectsOverlap(a,b) {
+  return a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y;
+}
+
+function update(dt) {
+  if (state !== 'play') return;
+  speed = Math.min(13, 5.5 + score*0.012);
+  score += dt*10;
+  distance += speed;
+  updateHud();
+
+  player.h = player.ducking ? 22 : 38;
+  player.y = player.onGround ? GROUND_Y - player.h : player.y;
+  if (!player.onGround) {
+    player.vy += GRAVITY;
+    player.y += player.vy;
+    if (player.y + player.h >= GROUND_Y) {
+      player.y = GROUND_Y - player.h;
+      player.vy = 0;
+      player.onGround = true;
+    }
+  }
+
+  spawnTimer -= dt;
+  if (spawnTimer <= 0) {
+    spawnObstacle();
+    spawnTimer = Math.max(0.65, 1.5 - score*0.004) + Math.random()*0.4;
+  }
+
+  const pBox = { x: player.x, y: player.y, w: player.w, h: player.h };
+  for (const o of obstacles) {
+    o.x -= speed;
+    if (rectsOverlap(pBox, o)) endGame();
+  }
+  obstacles = obstacles.filter(o => o.x > -60);
+
+  for (const p of particles) { p.x -= speed*0.6; p.life--; }
+  particles = particles.filter(p=>p.life>0);
+  if (Math.random() < 0.5) particles.push({x:W, y: GROUND_Y - Math.random()*10, life: 40});
+}
+
+function draw() {
+  ctx.fillStyle = '#0a0c14';
+  ctx.fillRect(0,0,W,H);
+
+  // parallax stars
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  for (let i=0;i<20;i++) {
+    const x = (i*67 - distance*0.15) % (W+40) - 20;
+    ctx.fillRect(x, 30+((i*53)%150), 2, 2);
+  }
+
+  ctx.strokeStyle = 'rgba(92,217,122,0.5)';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0,GROUND_Y); ctx.lineTo(W,GROUND_Y); ctx.stroke();
+  ctx.fillStyle = 'rgba(92,217,122,0.06)';
+  ctx.fillRect(0,GROUND_Y,W,H-GROUND_Y);
+
+  for (const p of particles) {
+    ctx.globalAlpha = Math.max(0,p.life/40)*0.3;
+    ctx.fillStyle = '#5cd97a';
+    ctx.fillRect(p.x,p.y,3,3);
+  }
+  ctx.globalAlpha = 1;
+
+  for (const o of obstacles) {
+    ctx.save();
+    ctx.shadowColor = o.type==='ground' ? '#ff5a5a' : '#4dd6ff';
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = o.type==='ground' ? '#ff5a5a' : '#4dd6ff';
+    ctx.fillRect(o.x,o.y,o.w,o.h);
+    ctx.restore();
+  }
+
+  ctx.save();
+  ctx.shadowColor = '#5cd97a';
+  ctx.shadowBlur = 12;
+  ctx.fillStyle = '#5cd97a';
+  ctx.fillRect(player.x, player.y, player.w, player.h);
+  ctx.restore();
+}
+
+let last = performance.now();
+function loop(t) {
+  const dt = Math.min(0.033,(t-last)/1000);
+  last = t;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+reset();
+draw();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

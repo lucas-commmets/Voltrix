@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Voltrix</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#0a0c14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Voltrix">
+<link rel="stylesheet" href="style.css">
+<style>
+  #grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+    width: 100%;
+    max-width: 640px;
+  }
+  @media (max-width: 480px) {
+    #grid { grid-template-columns: 1fr; }
+  }
+  .gcard {
+    display: block;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px;
+    padding: 18px;
+    transition: transform 0.15s, border-color 0.15s, background 0.15s;
+  }
+  .gcard:hover { transform: translateY(-2px); background: rgba(255,255,255,0.05); }
+  .gicon {
+    width: 56px; height: 56px;
+    margin-bottom: 8px;
+    display: block;
+  }
+  .gcard h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; color: #fff; }
+  .gcard p { margin: 0; font-size: 12px; color: #8890a0; line-height: 1.4; }
+</style>
+</head>
+<body>
+  <h1>Vol<span>trix</span></h1>
+  <div id="sub">pick a game</div>
+
+  <div id="grid">
+    <a class="gcard" href="reflex-arena.html">
+      <canvas class="gicon" data-icon="reflex" width="112" height="112"></canvas>
+      <h3>Reflex Arena</h3>
+      <p>React fast or die trying. One life, gets faster every point.</p>
+    </a>
+    <a class="gcard" href="neon-stacker.html">
+      <canvas class="gicon" data-icon="tower" width="112" height="112"></canvas>
+      <h3>Tower Rush</h3>
+      <p>Time your taps to stack blocks perfectly as the tower climbs.</p>
+    </a>
+    <a class="gcard" href="neon-runner.html">
+      <canvas class="gicon" data-icon="dash" width="112" height="112"></canvas>
+      <h3>Glow Dash</h3>
+      <p>Endless runner — jump and duck obstacles as it speeds up.</p>
+    </a>
+    <a class="gcard" href="neon-dodger.html">
+      <canvas class="gicon" data-icon="dodge" width="112" height="112"></canvas>
+      <h3>Storm Dodge</h3>
+      <p>Dodge falling blocks and survive as long as you possibly can.</p>
+    </a>
+    <a class="gcard" href="neon-aim.html">
+      <canvas class="gicon" data-icon="target" width="112" height="112"></canvas>
+      <h3>Flash Target</h3>
+      <p>Click the target before the ring closes. 3 misses ends it.</p>
+    </a>
+    <a class="gcard" href="neon-breakout.html">
+      <canvas class="gicon" data-icon="blitz" width="112" height="112"></canvas>
+      <h3>Brick Blitz</h3>
+      <p>Classic paddle and ball — break every brick without losing all 3 lives.</p>
+    </a>
+  </div>
+
+  <div id="controls" style="margin-top:20px;">tap any game to play &nbsp;·&nbsp; works offline once installed</div>
+
+<script>
+function drawIcon(canvas) {
+  const ctx = canvas.getContext('2d');
+  const s = canvas.width; // 112, displayed at 56 (2x for crispness)
+  ctx.clearRect(0,0,s,s);
+  const type = canvas.dataset.icon;
+
+  function glow(color, blur) { ctx.shadowColor = color; ctx.shadowBlur = blur; }
+  function noGlow() { ctx.shadowBlur = 0; }
+
+  if (type === 'reflex') {
+    const cx=s/2, cy=s/2, r=s*0.26;
+    const g = ctx.createRadialGradient(cx,cy,0,cx,cy,r*2.1);
+    g.addColorStop(0,'rgba(77,214,255,0.45)'); g.addColorStop(1,'rgba(77,214,255,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx,cy,r*2.1,0,Math.PI*2); ctx.fill();
+    glow('#4dd6ff',14);
+    ctx.fillStyle = '#4dd6ff';
+    ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
+    noGlow();
+    ctx.strokeStyle = '#eafcff'; ctx.lineWidth = s*0.03;
+    ctx.beginPath(); ctx.arc(cx,cy,r*0.5,0,Math.PI*2); ctx.stroke();
+  }
+
+  else if (type === 'tower') {
+    const colors = ['#ff9a4d','#ffd166','#5cd97a','#4dd6ff'];
+    const bw = s*0.62, bh = s*0.15;
+    const offsets = [0, s*0.08, -s*0.05, s*0.03];
+    for (let i=0;i<4;i++) {
+      const y = s*0.86 - i*(bh+3);
+      const x = s/2 - bw/2 + offsets[i]*0.6;
+      glow(colors[i], 8);
+      ctx.fillStyle = colors[i];
+      ctx.fillRect(x, y, bw*(1-i*0.08), bh);
+    }
+    noGlow();
+  }
+
+  else if (type === 'dash') {
+    // motion lines
+    ctx.strokeStyle = 'rgba(92,217,122,0.35)';
+    ctx.lineWidth = s*0.025;
+    for (let i=0;i<3;i++) {
+      ctx.beginPath();
+      ctx.moveTo(s*0.08, s*0.4+i*s*0.12);
+      ctx.lineTo(s*0.28, s*0.4+i*s*0.12);
+      ctx.stroke();
+    }
+    glow('#5cd97a',12);
+    ctx.fillStyle = '#5cd97a';
+    ctx.fillRect(s*0.42, s*0.32, s*0.22, s*0.34);
+    noGlow();
+    // ground line
+    ctx.strokeStyle = 'rgba(92,217,122,0.5)';
+    ctx.lineWidth = s*0.025;
+    ctx.beginPath(); ctx.moveTo(s*0.1,s*0.78); ctx.lineTo(s*0.9,s*0.78); ctx.stroke();
+  }
+
+  else if (type === 'dodge') {
+    const colors = ['#ff5a5a','#ffd166','#4dd6ff'];
+    const blocks = [[s*0.22,s*0.18,colors[0]],[s*0.56,s*0.34,colors[1]],[s*0.36,s*0.5,colors[2]]];
+    for (const [x,y,c] of blocks) {
+      glow(c,8);
+      ctx.fillStyle = c;
+      ctx.fillRect(x,y,s*0.18,s*0.12);
+    }
+    noGlow();
+    glow('#b784ff',12);
+    ctx.fillStyle = '#b784ff';
+    ctx.beginPath(); ctx.arc(s*0.5, s*0.82, s*0.11, 0, Math.PI*2); ctx.fill();
+    noGlow();
+  }
+
+  else if (type === 'target') {
+    const cx=s/2, cy=s/2, r=s*0.24;
+    const g = ctx.createRadialGradient(cx,cy,0,cx,cy,r*2);
+    g.addColorStop(0,'rgba(255,209,102,0.4)'); g.addColorStop(1,'rgba(255,209,102,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx,cy,r*2,0,Math.PI*2); ctx.fill();
+    glow('#ffd166',12);
+    ctx.fillStyle = '#ffd166';
+    ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
+    noGlow();
+    ctx.fillStyle = '#05060a';
+    ctx.beginPath(); ctx.arc(cx,cy,r*0.32,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle = '#ff5a5a'; ctx.lineWidth = s*0.035;
+    ctx.beginPath(); ctx.arc(cx,cy,r+s*0.06,-Math.PI/2,Math.PI*0.9); ctx.stroke();
+  }
+
+  else if (type === 'blitz') {
+    const bricks = ['#ff5a5a','#ff9a4d','#ffd166','#5cd97a'];
+    const bw = s*0.2, bh = s*0.1;
+    for (let i=0;i<4;i++) {
+      glow(bricks[i],6);
+      ctx.fillStyle = bricks[i];
+      ctx.fillRect(s*0.08 + i*(bw+3), s*0.18, bw, bh);
+    }
+    noGlow();
+    glow('#fff',8);
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(s*0.62, s*0.52, s*0.05, 0, Math.PI*2); ctx.fill();
+    noGlow();
+    glow('#ff7ab8',10);
+    ctx.fillStyle = '#ff7ab8';
+    const pw = s*0.32, ph = s*0.08;
+    ctx.beginPath();
+    const r2 = s*0.02, px = s*0.3, py = s*0.78;
+    ctx.moveTo(px+r2,py);
+    ctx.arcTo(px+pw,py,px+pw,py+ph,r2);
+    ctx.arcTo(px+pw,py+ph,px,py+ph,r2);
+    ctx.arcTo(px,py+ph,px,py,r2);
+    ctx.arcTo(px,py,px+pw,py,r2);
+    ctx.fill();
+    noGlow();
+  }
+}
+
+document.querySelectorAll('.gicon').forEach(drawIcon);
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
