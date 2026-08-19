@@ -155,16 +155,20 @@ goBtn.addEventListener('click', startGame);
 function update() {
   if (state === 'play' && current) {
     current.x += current.vx;
-    if (current.x < -current.w*0.4 || current.x > W - current.w*0.6) current.vx *= -1;
+    // Only bounce if moving further outwards past the edge
+    if ((current.x < -current.w * 0.3 && current.vx < 0) || 
+        (current.x > W - current.w * 0.7 && current.vx > 0)) {
+      current.vx *= -1;
+    }
   }
-  const targetCam = Math.max(0, (H - (stack.length)*BLOCK_H - 220));
+  const targetCam = Math.max(0, (H - (stack.length) * BLOCK_H - 220));
   camY += (targetCam - camY) * 0.15;
   for (const p of particles) {
     p.x += p.vx; p.y += p.vy;
     if (p.grav) p.vy += 0.15;
     p.life--;
   }
-  particles = particles.filter(p=>p.life>0);
+  particles = particles.filter(p => p.life > 0);
   if (shakeT > 0) shakeT *= 0.8;
 }
 
