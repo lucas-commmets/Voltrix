@@ -155,14 +155,18 @@ goBtn.addEventListener('click', startGame);
 function update() {
   if (state === 'play' && current) {
     current.x += current.vx;
-    // Only bounce if moving further outwards past the edge
+    // Edge bounce check
     if ((current.x < -current.w * 0.3 && current.vx < 0) || 
         (current.x > W - current.w * 0.7 && current.vx > 0)) {
       current.vx *= -1;
     }
   }
-  const targetCam = Math.max(0, (H - (stack.length) * BLOCK_H - 220));
+
+  // Anchor camera to bottom until tower reaches top half
+  const towerTop = H - stack.length * BLOCK_H;
+  const targetCam = towerTop < 220 ? 220 - towerTop : 0;
   camY += (targetCam - camY) * 0.15;
+
   for (const p of particles) {
     p.x += p.vx; p.y += p.vy;
     if (p.grav) p.vy += 0.15;
