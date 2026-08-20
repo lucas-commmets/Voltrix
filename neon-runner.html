@@ -58,7 +58,11 @@ function tone(freq, dur, type='sine', vol=0.1) {
   } catch(e) {}
 }
 
-let player, obstacles, score, best = 0, speed, state = 'idle', spawnTimer, particles, distance;
+let _sync = null;
+import('./voltrix-sync.js').then(m => { _sync = m; }).catch(() => {});
+function syncBest(game, value) { if (_sync) _sync.saveScore(game, value).catch(() => {}); }
+
+let player, obstacles, score, best = Number(localStorage.getItem('voltrix_best_dash')) || 0, speed, state = 'idle', spawnTimer, particles, distance;
 
 function reset() {
   player = { x: 90, y: GROUND_Y-38, w: 30, h: 38, vy: 0, onGround: true, ducking: false };
@@ -109,7 +113,7 @@ function spawnObstacle() {
   if (type === 'ground') {
     obstacles.push({ type, x: W+20, y: GROUND_Y-26, w: 22, h: 26 });
   } else {
-    obstacles.push({ type, x: W+20, y: GROUND_Y-70, w: 46, h: 20 });
+    obstacles.push({ type, x: W+20, y: GROUND_Y-46, w: 46, h: 20 });
   }
 }
 
@@ -122,7 +126,7 @@ goBtn.addEventListener('click', startGame);
 
 function endGame() {
   state = 'over';
-  if (score > best) best = Math.floor(score);
+  if (score > best) { best = Math.floor(score); localStorage.setItem('voltrix_best_dash', best); syncBest('dash', best); }
   updateHud();
   tone(140,0.35,'sawtooth',0.13);
   cardTitle.textContent = 'Hit!';
