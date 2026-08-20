@@ -1,438 +1,157 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Brick Blitz</title>
-<link rel="icon" type="image/x-icon" href="favicon.ico">
-<meta name="theme-color" content="#0a0c14">
-<link rel="stylesheet" href="style.css">
-<style> :root { --accent: #ff7ab8; --accent-dim: rgba(255,122,184,0.25); } </style>
-</head>
-<body>
-  <h1>Brick <span>Blitz</span></h1>
-  <a class="backlink" href="index.html">&larr; Voltrix</a>
+// Voltrix account, friends, and leaderboard sync.
+// Loaded as an ES module (dynamic import) from the hub and every game page.
 
-  <div id="panel">
-    <div class="stat"><div class="label">Score</div><div class="value" id="scoreVal">0</div></div>
-    <div class="stat best"><div class="label">Best</div><div class="value" id="bestVal">0</div></div>
-    <div class="stat lives"><div class="label">Balls</div><div class="value" id="livesVal">●●●</div></div>
-  </div>
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import {
+  getFirestore, doc, getDoc, setDoc, updateDoc,
+  collection, addDoc, query, where, getDocs, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import { firebaseConfig } from './firebase-init.js';
 
-  <div id="wrap">
-    <canvas id="game" width="480" height="560"></canvas>
-    <div id="overlay">
-      <div class="card">
-        <h2 id="cardTitle">Ready</h2>
-        <p>Move the paddle with your mouse, arrow keys, or drag. Break every brick. 3 balls.</p>
-        <button class="go" id="goBtn">Start</button>
-      </div>
-    </div>
-  </div>
-  <div id="controls"><b>mouse / arrows / drag</b> to move paddle &nbsp;·&nbsp; clear all bricks to win</div>
+const app = initializeApp(firebaseConfig);
+export const db = getFirestore(app);
 
-<script>
-const canvas = document.getElementById('game');
-const ctx = canvas.getContext('2d');
-const W = 480, H = 560;
-canvas.width = W; canvas.height = H;
+const SESSION_KEY = 'voltrix_session';
 
-const overlay = document.getElementById('overlay');
-const cardTitle = document.getElementById('cardTitle');
-const goBtn = document.getElementById('goBtn');
-const scoreVal = document.getElementById('scoreVal');
-const bestVal = document.getElementById('bestVal');
-const livesVal = document.getElementById('livesVal');
+async function sha256(text) {
+  const enc = new TextEncoder().encode(text);
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
-let audioCtx = null;
-function tone(freq, dur, type='sine', vol=0.1) {
+function cleanUsername(u) {
+  return (u || '').trim().toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20);
+}
+
+export function getSession() {
+  try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; }
+}
+export function clearSession() { localStorage.removeItem(SESSION_KEY); }
+function setSession(s) { localStorage.setItem(SESSION_KEY, JSON.stringify(s)); }
+
+export async function signUp(usernameRaw, pin) {
+  const username = cleanUsername(usernameRaw);
+  if (!username || username.length < 3) throw new Error('Username needs to be at least 3 characters (letters, numbers, underscore).');
+  if (!/^\d{4,6}$/.test(pin)) throw new Error('PIN must be 4-6 digits.');
+
+  const ref = doc(db, 'users', username);
+  const existing = await getDoc(ref);
+  if (existing.exists()) throw new Error('That username is taken â try another.');
+
+  const pinHash = await sha256(username + ':' + pin);
+  await setDoc(ref, {
+    pinHash,
+    scores: { reflex: 0, tower: 0, dash: 0, dodge: 0, target: 0, blitz: 0 },
+    createdAt: serverTimestamp()
+  });
+  setSession({ username, pinHash });
+  return username;
+}
+
+export async function logIn(usernameRaw, pin) {
+  const username = cleanUsername(usernameRaw);
+  const pinHash = await sha256(username + ':' + pin);
+  const ref = doc(db, 'users', username);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error('No account with that username.');
+  if (snap.data().pinHash !== pinHash) throw new Error('Wrong PIN.');
+  setSession({ username, pinHash });
+  return username;
+}
+
+export async function saveScore(game, value) {
+  const session = getSession();
+  if (!session) return; // not logged in â local save still handled separately
   try {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-    o.type = type; o.frequency.value = freq;
-    g.gain.value = vol;
-    o.connect(g); g.connect(audioCtx.destination);
-    o.start();
-    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
-    o.stop(audioCtx.currentTime + dur);
-  } catch(e) {}
-}
-
-let score = 0, best = Number(localStorage.getItem('voltrix_best_blitz')) || 0, lives = 3, phase = 1, state = 'idle';
-
-let _sync = null;
-import('./voltrix-sync.js').then(m => { 
-  _sync = m; 
-  if (best > 0) { 
-    _sync.saveScore('blitz', best).catch(err => console.error(err)); 
-  }
-}).catch(err => console.error("Could not load voltrix-sync.js:", err));
-
-function syncBest(game, value) { 
-  if (_sync) {
-    _sync.saveScore(game, value).catch(err => console.error(err)); 
-  } else {
-    console.warn("Sync module not ready yet.");
-  }
-}
-
-let paddle = { w: 84, h: 12, x: (W - 84)/2, y: H - 36, defaultW: 84 };
-let ball = { x: W/2, y: H/2, r: 6, vx: 3, vy: -4, speed: 4.5 };
-let bricks = [], particles = [], powerups = [], shakeT = 0;
-
-const COLORS = ['#ff5a7a', '#ffd166', '#4dd6ff', '#00f5d4', '#b5179e'];
-
-function fmtHearts(n) { return '♥'.repeat(Math.max(n,0)) || '–'; }
-
-function updateHud() {
-  scoreVal.textContent = score;
-  bestVal.textContent = best;
-  livesVal.textContent = fmtHearts(lives);
-}
-
-function generateBricks() {
-  bricks = [];
-  const rows = phase === 3 ? 7 : (3 + phase);
-  const cols = 7;
-  const bw = (W - 40) / cols;
-  const bh = 18;
-  const startY = 60;
-
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      if (phase === 3 && (r + c) % 2 === 1 && Math.random() < 0.30) continue;
-
-      const color = COLORS[r % COLORS.length];
-      const hp = (phase === 3 && r === 0) ? 2 : 1;
-      bricks.push({
-        x: 20 + c * bw,
-        y: startY + r * (bh + 6),
-        w: bw - 4,
-        h: bh,
-        color: color,
-        hp: hp,
-        maxHp: hp,
-        active: true
-      });
-    }
-  }
-}
-
-function updateBallSpeed() {
-  ball.speed = 4.5 + (phase * 0.3) + (score * 0.0025);
-  const angle = Math.atan2(ball.vy, ball.vx);
-  ball.vx = Math.cos(angle) * ball.speed;
-  ball.vy = Math.sin(angle) * ball.speed;
-}
-
-function resetBall() {
-  paddle.w = paddle.defaultW;
-  paddle.x = (W - paddle.w) / 2;
-  ball.x = W / 2;
-  ball.y = H - 60;
-  const angle = (Math.random() * 0.6 - 0.3) - Math.PI / 2;
-  updateBallSpeed();
-  ball.vx = Math.cos(angle) * ball.speed;
-  ball.vy = Math.sin(angle) * ball.speed;
-}
-
-function resetGame() {
-  score = 0;
-  lives = 3;
-  phase = 1;
-  particles = [];
-  powerups = [];
-  generateBricks();
-  resetBall();
-  updateHud();
-}
-
-function advancePhase() {
-  if (phase >= 3) {
-    state = 'win';
-    if (score > best) { 
-      best = score; 
-      localStorage.setItem('voltrix_best_blitz', best); 
-    }
-    syncBest('blitz', score);
-    updateHud();
-
-    tone(600, 0.12, 'triangle', 0.1);
-    tone(800, 0.12, 'triangle', 0.1);
-    tone(1200, 0.3, 'triangle', 0.12);
-
-    cardTitle.textContent = 'VICTORY!';
-    document.querySelector('.card p').innerHTML = `All 3 Phases Cleared!<br>Final Score: <b style="color:#00f5d4">${score}</b>`;
-    goBtn.textContent = 'Play Again';
-    overlay.classList.remove('hidden');
-    return;
-  }
-
-  phase++;
-  tone(880, 0.2, 'triangle', 0.12);
-  tone(1100, 0.25, 'triangle', 0.12);
-  powerups = [];
-  generateBricks();
-  resetBall();
-}
-
-function startGame() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  resetGame();
-  state = 'play';
-  overlay.classList.add('hidden');
-}
-goBtn.addEventListener('click', startGame);
-
-function setPaddlePos(clientX) {
-  const rect = canvas.getBoundingClientRect();
-  const scaleX = W / rect.width;
-  const canvasX = (clientX - rect.left) * scaleX;
-  paddle.x = Math.max(0, Math.min(W - paddle.w, canvasX - paddle.w / 2));
-}
-
-window.addEventListener('mousemove', e => { if (state === 'play') setPaddlePos(e.clientX); });
-
-const PADDLE_KEY_SPEED = 460;
-let keys = {};
-document.addEventListener('keydown', e => {
-  const k = e.key.toLowerCase();
-  if (['arrowleft','arrowright'].includes(k)) e.preventDefault();
-  keys[k] = true;
-});
-document.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
-
-function updatePaddleFromKeys(dt) {
-  if (state !== 'play') return;
-  if (keys['arrowleft']) paddle.x -= PADDLE_KEY_SPEED * dt;
-  if (keys['arrowright']) paddle.x += PADDLE_KEY_SPEED * dt;
-  paddle.x = Math.max(0, Math.min(W - paddle.w, paddle.x));
-}
-
-window.addEventListener('touchmove', e => {
-  if (state === 'play' && e.touches[0]) {
-    setPaddlePos(e.touches[0].clientX);
-  }
-}, { passive: true });
-
-function spawnPowerup(x, y) {
-  if (Math.random() > 0.30) return;
-  const types = [
-    { type: 'wide', color: '#00f5d4', label: '⚡', name: 'NEON BEAM' },
-    { type: 'life', color: '#ff007f', label: '♥', name: 'CYBER HEART' },
-    { type: 'slow', color: '#00d2ff', label: '❄', name: 'ZERO FREQ' },
-    { type: 'bonus', color: '#ffe600', label: '★', name: 'OVERCHARGE' }
-  ];
-  const p = types[Math.floor(Math.random() * types.length)];
-  powerups.push({ x, y, vy: 2.2, r: 11, pulse: 0, ...p });
-}
-
-function applyPowerup(p) {
-  tone(800, 0.1, 'sawtooth', 0.12);
-  tone(1200, 0.15, 'sine', 0.1);
-
-  if (p.type === 'wide') {
-    paddle.w = Math.min(130, paddle.w + 26);
-  } else if (p.type === 'life') {
-    lives++;
-    updateHud();
-  } else if (p.type === 'slow') {
-    ball.speed = Math.max(3.5, ball.speed - 1.5);
-    const angle = Math.atan2(ball.vy, ball.vx);
-    ball.vx = Math.cos(angle) * ball.speed;
-    ball.vy = Math.sin(angle) * ball.speed;
-  } else if (p.type === 'bonus') {
-    score += 200;
-    updateHud();
-  }
-}
-
-function createSparks(x, y, color) {
-  for (let i = 0; i < 8; i++) {
-    const angle = Math.random() * Math.PI * 2;
-    const sp = 1 + Math.random() * 3;
-    particles.push({
-      x, y, vx: Math.cos(angle) * sp, vy: Math.sin(angle) * sp,
-      color, life: 18
+    const ref = doc(db, 'users', session.username);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return;
+    const current = snap.data().scores?.[game] ?? 0;
+    if (value <= current) return;
+    await updateDoc(ref, {
+      pinHash: session.pinHash, // required by security rules to prove it's really you
+      [`scores.${game}`]: value
     });
+  } catch (e) {
+    // Offline or Firebase not configured yet â fail silently, local score still saved.
   }
 }
 
-function update() {
-  if (state !== 'play') return;
+export async function sendFriendRequest(toRaw) {
+  const session = getSession();
+  if (!session) throw new Error('Log in first.');
+  const to = cleanUsername(toRaw);
+  if (!to) throw new Error('Enter a username.');
+  if (to === session.username) throw new Error("That's your own username.");
+  const toSnap = await getDoc(doc(db, 'users', to));
+  if (!toSnap.exists()) throw new Error('No user with that username.');
 
-  updatePaddleFromKeys(1/60);
+  const existingQ = query(
+    collection(db, 'friendRequests'),
+    where('from', '==', session.username),
+    where('to', '==', to)
+  );
+  const existingSnap = await getDocs(existingQ);
+  if (!existingSnap.empty) throw new Error('You already sent a request to this user.');
 
-  ball.x += ball.vx;
-  ball.y += ball.vy;
-
-  if (ball.x - ball.r < 0) { ball.x = ball.r; ball.vx *= -1; tone(300, 0.04); }
-  if (ball.x + ball.r > W) { ball.x = W - ball.r; ball.vx *= -1; tone(300, 0.04); }
-  if (ball.y - ball.r < 0) { ball.y = ball.r; ball.vy *= -1; tone(300, 0.04); }
-
-  if (ball.y + ball.r > H) {
-    lives--;
-    shakeT = 10;
-    tone(180, 0.2, 'sawtooth', 0.1);
-    updateHud();
-    if (lives <= 0) {
-      state = 'over';
-      if (score > best) { 
-        best = score; 
-        localStorage.setItem('voltrix_best_blitz', best); 
-      }
-      syncBest('blitz', score);
-      updateHud();
-
-      cardTitle.textContent = 'Game Over';
-      document.querySelector('.card p').innerHTML = `Phase Reached: <b>${phase}</b><br>Score: <b style="color:#4dd6ff">${score}</b>`;
-      goBtn.textContent = 'Try Again';
-      overlay.classList.remove('hidden');
-    } else {
-      resetBall();
-    }
-  }
-
-  if (ball.vy > 0 &&
-      ball.x > paddle.x && ball.x < paddle.x + paddle.w &&
-      ball.y + ball.r >= paddle.y && ball.y - ball.r <= paddle.y + paddle.h) {
-    
-    const hitPoint = (ball.x - (paddle.x + paddle.w / 2)) / (paddle.w / 2);
-    const angle = hitPoint * (Math.PI / 3);
-    ball.vx = Math.sin(angle) * ball.speed;
-    ball.vy = -Math.cos(angle) * ball.speed;
-    tone(440, 0.05, 'square', 0.08);
-  }
-
-  let activeBricks = 0;
-  for (const b of bricks) {
-    if (!b.active) continue;
-    activeBricks++;
-
-    if (ball.x + ball.r > b.x && ball.x - ball.r < b.x + b.w &&
-        ball.y + ball.r > b.y && ball.y - ball.r < b.y + b.h) {
-      
-      b.hp--;
-      score += 10 * phase;
-      updateBallSpeed();
-      updateHud();
-      createSparks(ball.x, ball.y, b.color);
-
-      if (b.hp <= 0) {
-        b.active = false;
-        spawnPowerup(b.x + b.w / 2, b.y + b.h / 2);
-        tone(520 + phase * 20, 0.06, 'triangle', 0.09);
-      } else {
-        tone(350, 0.05, 'triangle', 0.08);
-      }
-
-      ball.vy *= -1;
-      break;
-    }
-  }
-
-  for (const p of powerups) {
-    p.y += p.vy;
-    if (p.y + p.r >= paddle.y && p.y - p.r <= paddle.y + paddle.h &&
-        p.x >= paddle.x && p.x <= paddle.x + paddle.w) {
-      applyPowerup(p);
-      p.collected = true;
-    }
-  }
-  powerups = powerups.filter(p => !p.collected && p.y - p.r < H);
-
-  if (activeBricks === 0) advancePhase();
-
-  for (const p of particles) {
-    p.x += p.vx; p.y += p.vy; p.life--;
-  }
-  particles = particles.filter(p => p.life > 0);
-
-  if (shakeT > 0) shakeT *= 0.8;
+  await addDoc(collection(db, 'friendRequests'), {
+    from: session.username,
+    to,
+    status: 'pending',
+    createdAt: serverTimestamp()
+  });
 }
 
-function draw() {
-  ctx.save();
-  if (shakeT > 0.3) ctx.translate((Math.random() - 0.5) * shakeT, (Math.random() - 0.5) * shakeT);
-
-  ctx.fillStyle = '#0a0c14';
-  ctx.fillRect(0, 0, W, H);
-  ctx.strokeStyle = 'rgba(255,255,255,0.03)';
-  for (let x = 0; x < W; x += 32) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
-  for (let y = 0; y < H; y += 32) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
-
-  ctx.fillStyle = 'rgba(77, 214, 255, 0.4)';
-  ctx.font = '600 11px sans-serif';
-  ctx.fillText(`PHASE ${phase}`, 20, 28);
-  ctx.fillText(`SPEED ${ball.speed.toFixed(1)}x`, W - 85, 28);
-
-  for (const b of bricks) {
-    if (!b.active) continue;
-    ctx.fillStyle = b.hp < b.maxHp ? '#ffffff' : b.color;
-    ctx.shadowColor = b.color;
-    ctx.shadowBlur = 8;
-    ctx.fillRect(b.x, b.y, b.w, b.h);
-  }
-  ctx.shadowBlur = 0;
-
-  for (const p of powerups) {
-    p.pulse += 0.1;
-    const glowRadius = p.r + Math.sin(p.pulse) * 2;
-
-    ctx.save();
-    ctx.strokeStyle = p.color;
-    ctx.shadowColor = p.color;
-    ctx.shadowBlur = 16;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, glowRadius, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.fillStyle = 'rgba(10, 12, 20, 0.9)';
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = p.color;
-    ctx.font = 'bold 12px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(p.label, p.x, p.y + 1);
-    ctx.restore();
-  }
-  ctx.shadowBlur = 0;
-
-  ctx.fillStyle = '#4dd6ff';
-  ctx.shadowColor = '#4dd6ff';
-  ctx.shadowBlur = 10;
-  ctx.fillRect(paddle.x, paddle.y, paddle.w, paddle.h);
-
-  ctx.fillStyle = '#ffffff';
-  ctx.shadowColor = '#ffffff';
-  ctx.shadowBlur = 12;
-  ctx.beginPath();
-  ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.shadowBlur = 0;
-
-  for (const p of particles) {
-    ctx.globalAlpha = Math.max(0, p.life / 18);
-    ctx.fillStyle = p.color;
-    ctx.fillRect(p.x, p.y, 3, 3);
-  }
-  ctx.globalAlpha = 1;
-
-  ctx.restore();
+export async function listIncomingRequests() {
+  const session = getSession();
+  if (!session) return [];
+  const q = query(
+    collection(db, 'friendRequests'),
+    where('to', '==', session.username),
+    where('status', '==', 'pending')
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
-function loop() {
-  update();
-  draw();
-  requestAnimationFrame(loop);
+export async function respondToRequest(reqId, accept) {
+  const ref = doc(db, 'friendRequests', reqId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+  await updateDoc(ref, {
+    from: snap.data().from,
+    to: snap.data().to,
+    status: accept ? 'accepted' : 'rejected'
+  });
 }
 
-resetGame();
-loop();
-</script>
-</body>
-</html>
+export async function listFriends() {
+  const session = getSession();
+  if (!session) return [];
+  const q1 = query(collection(db, 'friendRequests'), where('from', '==', session.username), where('status', '==', 'accepted'));
+  const q2 = query(collection(db, 'friendRequests'), where('to', '==', session.username), where('status', '==', 'accepted'));
+  const [s1, s2] = await Promise.all([getDocs(q1), getDocs(q2)]);
+  const friends = new Set();
+  s1.docs.forEach(d => friends.add(d.data().to));
+  s2.docs.forEach(d => friends.add(d.data().from));
+  return Array.from(friends);
+}
+
+export async function getUserScores(username) {
+  const snap = await getDoc(doc(db, 'users', username));
+  return snap.exists() ? snap.data().scores : null;
+}
+
+export async function getLeaderboard(game) {
+  const session = getSession();
+  if (!session) return [];
+  const friends = await listFriends();
+  const usernames = [session.username, ...friends];
+  const rows = [];
+  for (const u of usernames) {
+    const scores = await getUserScores(u);
+    rows.push({ username: u, score: scores?.[game] ?? 0, isMe: u === session.username });
+  }
+  rows.sort((a, b) => b.score - a.score);
+  return rows;
+}
