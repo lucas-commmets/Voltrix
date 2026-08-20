@@ -261,9 +261,15 @@ function update() {
     tone(180, 0.2, 'sawtooth', 0.1);
     updateHud();
     if (lives <= 0) {
-      state = 'over';
-      if (score > best) { best = score; localStorage.setItem('voltrix_best_blitz', best); syncBest('blitz', best); }
-      updateHud();
+  state = 'over';
+  if (score > best) { 
+    best = score; 
+    localStorage.setItem('voltrix_best_blitz', best); 
+  }
+  syncBest('blitz', score); // Sync the game score directly
+  updateHud();
+  // ... rest of game over code
+}
       cardTitle.textContent = 'Game Over';
       document.querySelector('.card p').innerHTML = `Phase Reached: <b>${phase}</b><br>Score: <b style="color:#4dd6ff">${score}</b>`;
       goBtn.textContent = 'Try Again';
