@@ -184,6 +184,10 @@ function tone(freq, dur, type='sine', vol=0.1) {
   } catch(e) {}
 }
 
+let _sync = null;
+import('./voltrix-sync.js').then(m => { _sync = m; }).catch(() => {});
+function syncBest(game, value) { if (_sync) _sync.saveScore(game, value).catch(() => {}); }
+
 const COLORS = {
   blue:   '#4dd6ff',
   red:    '#ff5a5a',
@@ -196,7 +200,7 @@ const COLORS = {
 };
 const BOX_POOL = ['blue','yellow','purple','green','orange','cyan','pink'];
 
-let score = 0, best = 0, lives = 1;
+let score = 0, best = Number(localStorage.getItem('voltrix_best_reflex')) || 0, lives = 1;
 let state = 'idle'; // idle | active | resolving | gameover
 let challenge = null;
 let particles = [];
@@ -250,7 +254,7 @@ function spawnChallenge() {
 function endGame() {
   state = 'gameover';
   challenge = null;
-  if (score > best) best = score;
+  if (score > best) { best = score; localStorage.setItem('voltrix_best_reflex', best); syncBest('reflex', best); }
   tone(140, 0.4, 'sawtooth', 0.14);
   shakeT = 16;
   cardTitle.textContent = 'Run over';
