@@ -57,8 +57,12 @@ function tone(freq, dur, type='sine', vol=0.1) {
   } catch(e) {}
 }
 
+let _sync = null;
+import('./voltrix-sync.js').then(m => { _sync = m; }).catch(() => {});
+function syncBest(game, value) { if (_sync) _sync.saveScore(game, value).catch(() => {}); }
 
-let score = 0, best = 0, lives = 3, state = 'idle', target = null, particles = [], shakeT = 0;
+
+let score = 0, best = Number(localStorage.getItem('voltrix_best_target')) || 0, lives = 3, state = 'idle', target = null, particles = [], shakeT = 0;
 
 
 
@@ -111,7 +115,7 @@ function miss() {
 
 function endGame() {
   state = 'over';
-  if (score > best) best = score;
+  if (score > best) { best = score; localStorage.setItem('voltrix_best_target', best); syncBest('target', best); }
   updateHud();
   shakeT = 14;
   tone(140,0.35,'sawtooth',0.13);
