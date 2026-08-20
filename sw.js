@@ -1,4 +1,4 @@
-const CACHE_NAME = 'neon-arcade-v3';
+const CACHE_NAME = 'neon-arcade-v6';
 const ASSETS = [
   './index.html',
   './style.css',
@@ -11,7 +11,10 @@ const ASSETS = [
   './neon-runner.html',
   './neon-dodger.html',
   './neon-breakout.html',
-  './neon-aim.html'
+  './neon-aim.html',
+  './friends.html',
+  './voltrix-sync.js',
+  './firebase-init.js'
 ];
 
 self.addEventListener('install', (event) => {
