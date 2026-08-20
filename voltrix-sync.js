@@ -63,30 +63,41 @@ export async function saveScore(game, value) {
   const session = getSession();
   if (!session) return; 
 
-  // Convert input score to a number
+  const gameKey = String(game).trim().toLowerCase();
   const numericValue = Number(value);
   if (isNaN(numericValue)) return;
 
   try {
     const ref = doc(db, 'users', session.username);
     const snap = await getDoc(ref);
+    
     if (!snap.exists()) return;
 
-    const current = snap.data().scores?.[game] ?? (game === 'reflex' ? Infinity : 0);
+    const userData = snap.data();
+    const currentScore = userData.scores?.[gameKey];
 
-    // Reflex is lower-is-better; other games are higher-is-better
-    const isBetter = game === 'reflex' 
-      ? numericValue < current 
-      : numericValue > current;
+    // Determine if the new score is an improvement
+    let isBetter = false;
+    if (gameKey === 'reflex') {
+      // Lower score is better (ms response time)
+      isBetter = currentScore === undefined || currentScore === 0 || numericValue < currentScore;
+    } else {
+      // Higher score is better (points/blocks/seconds)
+      isBetter = currentScore === undefined || numericValue > currentScore;
+    }
 
     if (!isBetter) return;
 
-    await updateDoc(ref, {
+    // Use setDoc with merge to ensure missing score keys are safely initialized
+    await setDoc(ref, {
       pinHash: session.pinHash,
-      [`scores.${game}`]: numericValue
-    });
+      scores: {
+        [gameKey]: numericValue
+      }
+    }, { merge: true });
+
   } catch (e) {
-    console.error(`Failed to save score for ${game}:`, e); // Log errors for debugging
+    console.error(`[Voltrix Sync] Error saving score for ${gameKey}:`, e);
   }
 }
 
