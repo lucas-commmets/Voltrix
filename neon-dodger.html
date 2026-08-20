@@ -55,7 +55,11 @@ function tone(freq, dur, type='sine', vol=0.1) {
   } catch(e) {}
 }
 
-let player, blocks, elapsed, best = 0, state = 'idle', spawnTimer, keys = {}, particles, shakeT = 0;
+let _sync = null;
+import('./voltrix-sync.js').then(m => { _sync = m; }).catch(() => {});
+function syncBest(game, value) { if (_sync) _sync.saveScore(game, value).catch(() => {}); }
+
+let player, blocks, elapsed, best = Number(localStorage.getItem('voltrix_best_dodge')) || 0, state = 'idle', spawnTimer, keys = {}, particles, shakeT = 0;
 
 function reset() {
   player = { x: W/2, w: 26, h: 26, targetX: W/2 };
@@ -108,7 +112,7 @@ goBtn.addEventListener('click', startGame);
 
 function endGame() {
   state = 'over';
-  if (elapsed > best) best = elapsed;
+  if (elapsed > best) { best = elapsed; localStorage.setItem('voltrix_best_dodge', best.toFixed(1)); syncBest('dodge', Number(best.toFixed(1))); }
   updateHud();
   shakeT = 14;
   tone(140,0.35,'sawtooth',0.13);
