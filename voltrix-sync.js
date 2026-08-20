@@ -61,19 +61,32 @@ export async function logIn(usernameRaw, pin) {
 
 export async function saveScore(game, value) {
   const session = getSession();
-  if (!session) return; // not logged in — local save still handled separately
+  if (!session) return; 
+
+  // Convert input score to a number
+  const numericValue = Number(value);
+  if (isNaN(numericValue)) return;
+
   try {
     const ref = doc(db, 'users', session.username);
     const snap = await getDoc(ref);
     if (!snap.exists()) return;
-    const current = snap.data().scores?.[game] ?? 0;
-    if (value <= current) return;
+
+    const current = snap.data().scores?.[game] ?? (game === 'reflex' ? Infinity : 0);
+
+    // Reflex is lower-is-better; other games are higher-is-better
+    const isBetter = game === 'reflex' 
+      ? numericValue < current 
+      : numericValue > current;
+
+    if (!isBetter) return;
+
     await updateDoc(ref, {
-      pinHash: session.pinHash, // required by security rules to prove it's really you
-      [`scores.${game}`]: value
+      pinHash: session.pinHash,
+      [`scores.${game}`]: numericValue
     });
   } catch (e) {
-    // Offline or Firebase not configured yet — fail silently, local score still saved.
+    console.error(`Failed to save score for ${game}:`, e); // Log errors for debugging
   }
 }
 
