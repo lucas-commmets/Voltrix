@@ -6,6 +6,13 @@
 <title>Friends — Voltrix</title>
 <link rel="icon" type="image/x-icon" href="favicon.ico">
 <meta name="theme-color" content="#0a0c14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+<!-- iOS WebKit Preconnects -->
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+
 <link rel="stylesheet" href="style.css">
 <style>
   :root { --accent: #4dffe0; --accent-dim: rgba(77,255,224,0.25); }
@@ -20,6 +27,7 @@
     margin-bottom: 14px;
     width: 100%;
     max-width: 440px;
+    box-sizing: border-box;
   }
   .box h2 { margin: 0 0 12px; font-size: 15px; font-weight: 600; color: #fff; }
   .row { display: flex; gap: 8px; margin-bottom: 8px; }
@@ -32,6 +40,7 @@
     color: #e8ecf4;
     font-size: 14px;
     outline: none;
+    box-sizing: border-box;
   }
   input:focus { border-color: var(--accent-dim); }
   button.action {
@@ -52,6 +61,23 @@
   }
   #msg { font-size: 12px; color: #ff9a4d; min-height: 16px; margin-top: 4px; }
   #msg.ok { color: #5cd97a; }
+
+  /* On-screen debugging for iOS PWA errors */
+  #debugConsole {
+    width: 100%;
+    max-width: 440px;
+    background: #000;
+    border: 1px solid #ff5a5a;
+    color: #ff5a5a;
+    font-family: monospace;
+    font-size: 11px;
+    padding: 10px;
+    border-radius: 8px;
+    margin-bottom: 14px;
+    box-sizing: border-box;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
 
   .tabs { display: flex; gap: 6px; margin-bottom: 6px; }
   .tabs button {
@@ -106,13 +132,15 @@
   <a class="backlink" href="index.html">&larr; Voltrix</a>
 
   <div id="panelWrap">
+    <div id="debugConsole" class="hidden"></div>
+
     <div id="authBox" class="box">
       <h2 id="authTitle">Log in or sign up</h2>
       <div class="row">
-        <input id="userInput" placeholder="username" autocomplete="off">
+        <input id="userInput" placeholder="username" autocomplete="username" autocapitalize="none">
       </div>
       <div class="row">
-        <input id="pinInput" placeholder="4-6 digit PIN" inputmode="numeric" maxlength="6" type="password">
+        <input id="pinInput" placeholder="4-6 digit PIN" inputmode="numeric" pattern="\d{4,6}" maxlength="6" type="password">
       </div>
       <div class="row">
         <button class="action" id="loginBtn">Log in</button>
@@ -127,7 +155,7 @@
       <div class="box">
         <h2>Add a friend</h2>
         <div class="row">
-          <input id="friendInput" placeholder="their username" autocomplete="off">
+          <input id="friendInput" placeholder="their username" autocomplete="off" autocapitalize="none">
           <button class="action" id="addFriendBtn">Add</button>
         </div>
         <div id="friendMsg" style="font-size:12px; color:#ff9a4d; min-height:16px;"></div>
@@ -162,6 +190,16 @@
     </div>
   </div>
 
+<script>
+  const dbg = document.getElementById('debugConsole');
+  function logErr(msg) {
+    dbg.classList.remove('hidden');
+    dbg.textContent += '[Error] ' + msg + '\n';
+  }
+  window.onerror = function(m, u, l) { logErr(m + ' (line ' + l + ')'); };
+  window.onunhandledrejection = function(e) { logErr(e.reason ? (e.reason.message || e.reason) : e); };
+</script>
+
 <script type="module">
 import {
   getSession, clearSession, signUp, logIn,
@@ -180,21 +218,25 @@ function showMsg(text, ok=false) {
 }
 
 async function refreshAll() {
-  const session = getSession();
-  if (!session) {
-    authBox.classList.remove('hidden');
-    loggedInArea.classList.add('hidden');
-    return;
+  try {
+    const session = getSession();
+    if (!session || !session.username) {
+      authBox.classList.remove('hidden');
+      loggedInArea.classList.add('hidden');
+      return;
+    }
+    authBox.classList.add('hidden');
+    loggedInArea.classList.remove('hidden');
+    whoami.innerHTML = `Logged in as <b>${session.username}</b>`;
+    await Promise.all([refreshRequests(), refreshFriends(), refreshLeaderboard()]);
+  } catch(e) {
+    logErr('Failed loading session data: ' + e.message);
   }
-  authBox.classList.add('hidden');
-  loggedInArea.classList.remove('hidden');
-  whoami.innerHTML = `Logged in as <b>${session.username}</b>`;
-  await Promise.all([refreshRequests(), refreshFriends(), refreshLeaderboard()]);
 }
 
 document.getElementById('loginBtn').addEventListener('click', async () => {
-  const u = document.getElementById('userInput').value;
-  const p = document.getElementById('pinInput').value;
+  const u = document.getElementById('userInput').value.trim();
+  const p = document.getElementById('pinInput').value.trim();
   showMsg('Logging in…');
   try {
     await logIn(u, p);
@@ -204,8 +246,8 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
 });
 
 document.getElementById('signupBtn').addEventListener('click', async () => {
-  const u = document.getElementById('userInput').value;
-  const p = document.getElementById('pinInput').value;
+  const u = document.getElementById('userInput').value.trim();
+  const p = document.getElementById('pinInput').value.trim();
   showMsg('Creating account…');
   try {
     await signUp(u, p);
@@ -225,7 +267,7 @@ document.getElementById('addFriendBtn').addEventListener('click', async () => {
   fmsg.style.color = '#ff9a4d';
   fmsg.textContent = 'Sending…';
   try {
-    await sendFriendRequest(input.value);
+    await sendFriendRequest(input.value.trim());
     fmsg.style.color = '#5cd97a';
     fmsg.textContent = 'Request sent!';
     input.value = '';
@@ -234,32 +276,40 @@ document.getElementById('addFriendBtn').addEventListener('click', async () => {
 
 async function refreshRequests() {
   const list = document.getElementById('requestsList');
-  const reqs = await listIncomingRequests();
-  if (!reqs.length) { list.innerHTML = '<div class="empty">No pending requests</div>'; return; }
-  list.innerHTML = '';
-  for (const r of reqs) {
-    const row = document.createElement('div');
-    row.className = 'reqrow';
-    row.innerHTML = `<span>${r.from}</span>`;
-    const btns = document.createElement('div');
-    btns.className = 'reqbtns';
-    const acceptBtn = document.createElement('button');
-    acceptBtn.className = 'accept'; acceptBtn.textContent = 'Accept';
-    acceptBtn.onclick = async () => { await respondToRequest(r.id, true); await refreshAll(); };
-    const rejectBtn = document.createElement('button');
-    rejectBtn.className = 'reject'; rejectBtn.textContent = 'Decline';
-    rejectBtn.onclick = async () => { await respondToRequest(r.id, false); await refreshAll(); };
-    btns.append(acceptBtn, rejectBtn);
-    row.append(btns);
-    list.append(row);
+  try {
+    const reqs = await listIncomingRequests();
+    if (!reqs || !reqs.length) { list.innerHTML = '<div class="empty">No pending requests</div>'; return; }
+    list.innerHTML = '';
+    for (const r of reqs) {
+      const row = document.createElement('div');
+      row.className = 'reqrow';
+      row.innerHTML = `<span>${r.from}</span>`;
+      const btns = document.createElement('div');
+      btns.className = 'reqbtns';
+      const acceptBtn = document.createElement('button');
+      acceptBtn.className = 'accept'; acceptBtn.textContent = 'Accept';
+      acceptBtn.onclick = async () => { await respondToRequest(r.id, true); await refreshAll(); };
+      const rejectBtn = document.createElement('button');
+      rejectBtn.className = 'reject'; rejectBtn.textContent = 'Decline';
+      rejectBtn.onclick = async () => { await respondToRequest(r.id, false); await refreshAll(); };
+      btns.append(acceptBtn, rejectBtn);
+      row.append(btns);
+      list.append(row);
+    }
+  } catch(e) {
+    list.innerHTML = '<div class="empty">Error loading requests</div>';
   }
 }
 
 async function refreshFriends() {
   const list = document.getElementById('friendsList');
-  const friends = await listFriends();
-  if (!friends.length) { list.innerHTML = '<div class="empty">No friends yet — add someone above</div>'; return; }
-  list.innerHTML = friends.map(f => `<div class="friendItem">${f}</div>`).join('');
+  try {
+    const friends = await listFriends();
+    if (!friends || !friends.length) { list.innerHTML = '<div class="empty">No friends yet — add someone above</div>'; return; }
+    list.innerHTML = friends.map(f => `<div class="friendItem">${f}</div>`).join('');
+  } catch(e) {
+    list.innerHTML = '<div class="empty">Error loading friends</div>';
+  }
 }
 
 let currentGame = 'reflex';
@@ -277,15 +327,19 @@ document.querySelectorAll('#gameTabs button').forEach(btn => {
 async function refreshLeaderboard() {
   const list = document.getElementById('leaderboardList');
   list.innerHTML = '<div class="empty">Loading…</div>';
-  const rows = await getLeaderboard(currentGame);
-  if (!rows.length) { list.innerHTML = '<div class="empty">No scores yet</div>'; return; }
-  list.innerHTML = '';
-  rows.forEach((r, i) => {
-    const row = document.createElement('div');
-    row.className = 'lbrow' + (r.isMe ? ' me' : '');
-    row.innerHTML = `<span class="rank">#${i+1}</span><span class="name">${r.username}${r.isMe ? ' (you)' : ''}</span><span class="score">${r.score}${GAME_LABELS[currentGame]==='s' ? 's' : ''}</span>`;
-    list.append(row);
-  });
+  try {
+    const rows = await getLeaderboard(currentGame);
+    if (!rows || !rows.length) { list.innerHTML = '<div class="empty">No scores yet</div>'; return; }
+    list.innerHTML = '';
+    rows.forEach((r, i) => {
+      const row = document.createElement('div');
+      row.className = 'lbrow' + (r.isMe ? ' me' : '');
+      row.innerHTML = `<span class="rank">#${i+1}</span><span class="name">${r.username}${r.isMe ? ' (you)' : ''}</span><span class="score">${r.score}${GAME_LABELS[currentGame]==='s' ? 's' : ''}</span>`;
+      list.append(row);
+    });
+  } catch(e) {
+    list.innerHTML = '<div class="empty">Error loading leaderboard</div>';
+  }
 }
 
 refreshAll();
