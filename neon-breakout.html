@@ -58,7 +58,11 @@ function tone(freq, dur, type='sine', vol=0.1) {
   } catch(e) {}
 }
 
-let score = 0, best = 0, lives = 3, phase = 1, state = 'idle';
+let _sync = null;
+import('./voltrix-sync.js').then(m => { _sync = m; }).catch(() => {});
+function syncBest(game, value) { if (_sync) _sync.saveScore(game, value).catch(() => {}); }
+
+let score = 0, best = Number(localStorage.getItem('voltrix_best_blitz')) || 0, lives = 3, phase = 1, state = 'idle';
 let paddle = { w: 84, h: 12, x: (W - 84)/2, y: H - 36, defaultW: 84 };
 let ball = { x: W/2, y: H/2, r: 6, vx: 3, vy: -4, speed: 4.5 };
 let bricks = [], particles = [], powerups = [], shakeT = 0;
@@ -137,7 +141,7 @@ function advancePhase() {
   // Victory condition after completing Phase 3
   if (phase >= 3) {
     state = 'win';
-    if (score > best) best = score;
+    if (score > best) { best = score; localStorage.setItem('voltrix_best_blitz', best); syncBest('blitz', best); }
     updateHud();
 
     // Victory sound sequence
@@ -175,6 +179,21 @@ function setPaddlePos(clientX) {
 }
 
 window.addEventListener('mousemove', e => { if (state === 'play') setPaddlePos(e.clientX); });
+
+const PADDLE_KEY_SPEED = 460;
+let keys = {};
+document.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (['arrowleft','arrowright'].includes(k)) e.preventDefault();
+  keys[k] = true;
+});
+document.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+function updatePaddleFromKeys(dt) {
+  if (state !== 'play') return;
+  if (keys['arrowleft']) paddle.x -= PADDLE_KEY_SPEED * dt;
+  if (keys['arrowright']) paddle.x += PADDLE_KEY_SPEED * dt;
+  paddle.x = Math.max(0, Math.min(W - paddle.w, paddle.x));
+}
 window.addEventListener('touchmove', e => {
   if (state === 'play' && e.touches[0]) {
     setPaddlePos(e.touches[0].clientX);
@@ -240,6 +259,8 @@ function createSparks(x, y, color) {
 function update() {
   if (state !== 'play') return;
 
+  updatePaddleFromKeys(1/60);
+
   // Ball Movement
   ball.x += ball.vx;
   ball.y += ball.vy;
@@ -257,7 +278,7 @@ function update() {
     updateHud();
     if (lives <= 0) {
       state = 'over';
-      if (score > best) best = score;
+      if (score > best) { best = score; localStorage.setItem('voltrix_best_blitz', best); syncBest('blitz', best); }
       updateHud();
       cardTitle.textContent = 'Game Over';
       document.querySelector('.card p').innerHTML = `Phase Reached: <b>${phase}</b><br>Score: <b style="color:#4dd6ff">${score}</b>`;
