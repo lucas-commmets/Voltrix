@@ -79,6 +79,11 @@
       <h3>Brick Blitz</h3>
       <p>Classic paddle and ball — break every brick without losing all 3 lives.</p>
     </a>
+    <a class="gcard" href="friends.html">
+      <canvas class="gicon" data-icon="friends" width="112" height="112"></canvas>
+      <h3>Friends</h3>
+      <p>Add friends and see how your scores stack up against theirs.</p>
+    </a>
   </div>
 
   <div id="controls" style="margin-top:20px;">tap any game to play &nbsp;·&nbsp; works offline once installed</div>
@@ -194,6 +199,20 @@ function drawIcon(canvas) {
     ctx.arcTo(px,py+ph,px,py,r2);
     ctx.arcTo(px,py,px+pw,py,r2);
     ctx.fill();
+    noGlow();
+  }
+
+  else if (type === 'friends') {
+    // two overlapping glowing circles = "people"
+    glow('#4dffe0', 10);
+    ctx.fillStyle = 'rgba(77,255,224,0.55)';
+    ctx.beginPath(); ctx.arc(s*0.4, s*0.42, s*0.16, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(s*0.4, s*0.68, s*0.22, Math.PI, 0); ctx.fill();
+    noGlow();
+    glow('#4dd6ff', 10);
+    ctx.fillStyle = 'rgba(77,214,255,0.75)';
+    ctx.beginPath(); ctx.arc(s*0.64, s*0.38, s*0.14, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(s*0.64, s*0.62, s*0.19, Math.PI, 0); ctx.fill();
     noGlow();
   }
 }
