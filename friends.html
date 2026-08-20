@@ -143,8 +143,8 @@
         <input id="pinInput" placeholder="4-6 digit PIN" inputmode="numeric" pattern="\d{4,6}" maxlength="6" type="password">
       </div>
       <div class="row">
-        <button class="action" id="loginBtn">Log in</button>
-        <button class="action secondary" id="signupBtn">Sign up</button>
+        <button type="button" class="action" id="loginBtn">Log in</button>
+        <button type="button" class="action secondary" id="signupBtn">Sign up</button>
       </div>
       <div id="msg"></div>
     </div>
@@ -156,7 +156,7 @@
         <h2>Add a friend</h2>
         <div class="row">
           <input id="friendInput" placeholder="their username" autocomplete="off" autocapitalize="none">
-          <button class="action" id="addFriendBtn">Add</button>
+          <button type="button" class="action" id="addFriendBtn">Add</button>
         </div>
         <div id="friendMsg" style="font-size:12px; color:#ff9a4d; min-height:16px;"></div>
       </div>
@@ -174,18 +174,18 @@
       <div class="box">
         <h2>Leaderboard</h2>
         <div class="tabs" id="gameTabs">
-          <button data-game="reflex" class="active">Reflex</button>
-          <button data-game="tower">Tower</button>
-          <button data-game="dash">Dash</button>
-          <button data-game="dodge">Dodge</button>
-          <button data-game="target">Target</button>
-          <button data-game="blitz">Blitz</button>
+          <button type="button" data-game="reflex" class="active">Reflex</button>
+          <button type="button" data-game="tower">Tower</button>
+          <button type="button" data-game="dash">Dash</button>
+          <button type="button" data-game="dodge">Dodge</button>
+          <button type="button" data-game="target">Target</button>
+          <button type="button" data-game="blitz">Blitz</button>
         </div>
         <div id="leaderboardList"><div class="empty">Loading…</div></div>
       </div>
 
       <div class="row">
-        <button class="action secondary" id="logoutBtn" style="width:100%;">Log out</button>
+        <button type="button" class="action secondary" id="logoutBtn" style="width:100%;">Log out</button>
       </div>
     </div>
   </div>
@@ -234,34 +234,42 @@ async function refreshAll() {
   }
 }
 
-document.getElementById('loginBtn').addEventListener('click', async () => {
+document.getElementById('loginBtn').addEventListener('click', async (e) => {
+  e.preventDefault();
   const u = document.getElementById('userInput').value.trim();
   const p = document.getElementById('pinInput').value.trim();
+  if (!u || !p) { showMsg('Please enter both username and PIN.'); return; }
+  
   showMsg('Logging in…');
   try {
     await logIn(u, p);
     showMsg('Welcome back!', true);
     await refreshAll();
-  } catch (e) { showMsg(e.message); }
+  } catch (err) { showMsg(err.message || 'Login failed.'); }
 });
 
-document.getElementById('signupBtn').addEventListener('click', async () => {
+document.getElementById('signupBtn').addEventListener('click', async (e) => {
+  e.preventDefault();
   const u = document.getElementById('userInput').value.trim();
   const p = document.getElementById('pinInput').value.trim();
+  if (!u || !p) { showMsg('Please enter both username and PIN.'); return; }
+
   showMsg('Creating account…');
   try {
     await signUp(u, p);
     showMsg('Account created!', true);
     await refreshAll();
-  } catch (e) { showMsg(e.message); }
+  } catch (err) { showMsg(err.message || 'Signup failed.'); }
 });
 
-document.getElementById('logoutBtn').addEventListener('click', () => {
+document.getElementById('logoutBtn').addEventListener('click', (e) => {
+  e.preventDefault();
   clearSession();
   refreshAll();
 });
 
-document.getElementById('addFriendBtn').addEventListener('click', async () => {
+document.getElementById('addFriendBtn').addEventListener('click', async (e) => {
+  e.preventDefault();
   const input = document.getElementById('friendInput');
   const fmsg = document.getElementById('friendMsg');
   fmsg.style.color = '#ff9a4d';
@@ -271,7 +279,7 @@ document.getElementById('addFriendBtn').addEventListener('click', async () => {
     fmsg.style.color = '#5cd97a';
     fmsg.textContent = 'Request sent!';
     input.value = '';
-  } catch (e) { fmsg.textContent = e.message; }
+  } catch (err) { fmsg.textContent = err.message || 'Could not send request.'; }
 });
 
 async function refreshRequests() {
@@ -287,11 +295,13 @@ async function refreshRequests() {
       const btns = document.createElement('div');
       btns.className = 'reqbtns';
       const acceptBtn = document.createElement('button');
+      acceptBtn.type = 'button';
       acceptBtn.className = 'accept'; acceptBtn.textContent = 'Accept';
-      acceptBtn.onclick = async () => { await respondToRequest(r.id, true); await refreshAll(); };
+      acceptBtn.onclick = async (e) => { e.preventDefault(); await respondToRequest(r.id, true); await refreshAll(); };
       const rejectBtn = document.createElement('button');
+      rejectBtn.type = 'button';
       rejectBtn.className = 'reject'; rejectBtn.textContent = 'Decline';
-      rejectBtn.onclick = async () => { await respondToRequest(r.id, false); await refreshAll(); };
+      rejectBtn.onclick = async (e) => { e.preventDefault(); await respondToRequest(r.id, false); await refreshAll(); };
       btns.append(acceptBtn, rejectBtn);
       row.append(btns);
       list.append(row);
@@ -316,7 +326,8 @@ let currentGame = 'reflex';
 const GAME_LABELS = { reflex:'pts', tower:'blocks', dash:'pts', dodge:'s', target:'pts', blitz:'pts' };
 
 document.querySelectorAll('#gameTabs button').forEach(btn => {
-  btn.addEventListener('click', () => {
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
     document.querySelectorAll('#gameTabs button').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     currentGame = btn.dataset.game;
