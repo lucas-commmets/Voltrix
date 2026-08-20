@@ -137,31 +137,15 @@ function resetGame() {
   updateHud();
 }
 
-function advancePhase() {
-  // Victory condition after completing Phase 3
-  if (phase >= 3) {
-    state = 'win';
-    if (score > best) { best = score; localStorage.setItem('voltrix_best_blitz', best); syncBest('blitz', best); }
-    updateHud();
-
-    // Victory sound sequence
-    tone(600, 0.12, 'triangle', 0.1);
-    tone(800, 0.12, 'triangle', 0.1);
-    tone(1200, 0.3, 'triangle', 0.12);
-
-    cardTitle.textContent = 'VICTORY!';
-    document.querySelector('.card p').innerHTML = `All 3 Phases Cleared!<br>Final Score: <b style="color:#00f5d4">${score}</b>`;
-    goBtn.textContent = 'Play Again';
-    overlay.classList.remove('hidden');
-    return;
+if (phase >= 3) {
+  state = 'win';
+  if (score > best) { 
+    best = score; 
+    localStorage.setItem('voltrix_best_blitz', best); 
   }
-
-  phase++;
-  tone(880, 0.2, 'triangle', 0.12);
-  tone(1100, 0.25, 'triangle', 0.12);
-  powerups = [];
-  generateBricks();
-  resetBall();
+  syncBest('blitz', score); // Sync the game score directly
+  updateHud();
+  // ... rest of victory code
 }
 
 function startGame() {
