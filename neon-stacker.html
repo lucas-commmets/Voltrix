@@ -55,10 +55,14 @@ function tone(freq, dur, type='sine', vol=0.1) {
   } catch(e) {}
 }
 
+let _sync = null;
+import('./voltrix-sync.js').then(m => { _sync = m; }).catch(() => {});
+function syncBest(game, value) { if (_sync) _sync.saveScore(game, value).catch(() => {}); }
+
 const BLOCK_H = 32;
 const COLORS = ['#ff9a4d','#ffd166','#5cd97a','#4dd6ff','#b784ff','#ff7ab8'];
 
-let stack, current, score, best = 0, camY, state = 'idle', particles = [], shakeT = 0;
+let stack, current, score, best = Number(localStorage.getItem('voltrix_best_tower')) || 0, camY, state = 'idle', particles = [], shakeT = 0;
 
 function reset() {
   stack = [{ x: W/2 - 80, w: 160, y: H - BLOCK_H, color: COLORS[0] }];
@@ -135,7 +139,7 @@ canvas.addEventListener('touchstart', e => { e.preventDefault(); drop(); }, {pas
 
 function endGame() {
   state = 'over';
-  if (score > best) best = score;
+  if (score > best) { best = score; localStorage.setItem('voltrix_best_tower', best); syncBest('tower', best); }
   updateHud();
   shakeT = 12;
   tone(140,0.4,'sawtooth',0.14);
@@ -218,6 +222,7 @@ function draw() {
 }
 
 reset();
+updateHud();
 draw();
 function loop() {
   update();
