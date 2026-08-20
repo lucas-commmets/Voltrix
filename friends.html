@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Friends — Voltrix</title>
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<meta name="theme-color" content="#0a0c14">
+<link rel="stylesheet" href="style.css">
+<style>
+  :root { --accent: #4dffe0; --accent-dim: rgba(77,255,224,0.25); }
+  html, body { overflow: auto; height: auto; }
+  body { justify-content: flex-start; padding-top: 20px; padding-bottom: 30px; }
+  #panelWrap { width: 100%; max-width: 440px; }
+  .box {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+    padding: 18px;
+    margin-bottom: 14px;
+    width: 100%;
+    max-width: 440px;
+  }
+  .box h2 { margin: 0 0 12px; font-size: 15px; font-weight: 600; color: #fff; }
+  .row { display: flex; gap: 8px; margin-bottom: 8px; }
+  input {
+    flex: 1;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: #e8ecf4;
+    font-size: 14px;
+    outline: none;
+  }
+  input:focus { border-color: var(--accent-dim); }
+  button.action {
+    background: linear-gradient(135deg, var(--accent), #2fa88f);
+    border: none;
+    border-radius: 8px;
+    color: #05060a;
+    font-weight: 600;
+    font-size: 13px;
+    padding: 10px 16px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  button.action:hover { filter: brightness(1.1); }
+  button.action.secondary {
+    background: rgba(255,255,255,0.08);
+    color: #e8ecf4;
+  }
+  #msg { font-size: 12px; color: #ff9a4d; min-height: 16px; margin-top: 4px; }
+  #msg.ok { color: #5cd97a; }
+
+  .tabs { display: flex; gap: 6px; margin-bottom: 6px; }
+  .tabs button {
+    flex: 1;
+    padding: 8px 4px;
+    font-size: 11px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: #8890a0;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .tabs button.active {
+    background: var(--accent-dim);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  .lbrow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-size: 13px;
+  }
+  .lbrow.me { background: rgba(77,255,224,0.1); }
+  .lbrow .rank { color: #6b7488; width: 24px; }
+  .lbrow .name { flex: 1; }
+  .lbrow .score { font-weight: 600; color: var(--accent); }
+
+  .reqrow {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+    font-size: 13px;
+  }
+  .reqrow:last-child { border-bottom: none; }
+  .reqbtns { display: flex; gap: 6px; }
+  .reqbtns button {
+    padding: 5px 10px; font-size: 11px; border-radius: 6px; border: none; cursor: pointer;
+  }
+  .accept { background: #5cd97a; color: #05060a; }
+  .reject { background: rgba(255,255,255,0.1); color: #e8ecf4; }
+  .friendItem { padding: 6px 0; font-size: 13px; color: #cdd3e0; }
+  #whoami { font-size: 12px; color: #8890a0; text-align: center; margin-bottom: 10px; }
+  #whoami b { color: var(--accent); }
+  .hidden { display: none !important; }
+  .empty { font-size: 12px; color: #6b7488; text-align: center; padding: 8px 0; }
+</style>
+</head>
+<body>
+  <h1>Friends<span> & Leaderboard</span></h1>
+  <a class="backlink" href="index.html">&larr; Voltrix</a>
+
+  <div id="panelWrap">
+    <div id="authBox" class="box">
+      <h2 id="authTitle">Log in or sign up</h2>
+      <div class="row">
+        <input id="userInput" placeholder="username" autocomplete="off">
+      </div>
+      <div class="row">
+        <input id="pinInput" placeholder="4-6 digit PIN" inputmode="numeric" maxlength="6" type="password">
+      </div>
+      <div class="row">
+        <button class="action" id="loginBtn">Log in</button>
+        <button class="action secondary" id="signupBtn">Sign up</button>
+      </div>
+      <div id="msg"></div>
+    </div>
+
+    <div id="loggedInArea" class="hidden">
+      <div id="whoami"></div>
+
+      <div class="box">
+        <h2>Add a friend</h2>
+        <div class="row">
+          <input id="friendInput" placeholder="their username" autocomplete="off">
+          <button class="action" id="addFriendBtn">Add</button>
+        </div>
+        <div id="friendMsg" style="font-size:12px; color:#ff9a4d; min-height:16px;"></div>
+      </div>
+
+      <div class="box">
+        <h2>Friend requests</h2>
+        <div id="requestsList"><div class="empty">No pending requests</div></div>
+      </div>
+
+      <div class="box">
+        <h2>Your friends</h2>
+        <div id="friendsList"><div class="empty">No friends yet — add someone above</div></div>
+      </div>
+
+      <div class="box">
+        <h2>Leaderboard</h2>
+        <div class="tabs" id="gameTabs">
+          <button data-game="reflex" class="active">Reflex</button>
+          <button data-game="tower">Tower</button>
+          <button data-game="dash">Dash</button>
+          <button data-game="dodge">Dodge</button>
+          <button data-game="target">Target</button>
+          <button data-game="blitz">Blitz</button>
+        </div>
+        <div id="leaderboardList"><div class="empty">Loading…</div></div>
+      </div>
+
+      <div class="row">
+        <button class="action secondary" id="logoutBtn" style="width:100%;">Log out</button>
+      </div>
+    </div>
+  </div>
+
+<script type="module">
+import {
+  getSession, clearSession, signUp, logIn,
+  sendFriendRequest, listIncomingRequests, respondToRequest,
+  listFriends, getLeaderboard
+} from './voltrix-sync.js';
+
+const authBox = document.getElementById('authBox');
+const loggedInArea = document.getElementById('loggedInArea');
+const msg = document.getElementById('msg');
+const whoami = document.getElementById('whoami');
+
+function showMsg(text, ok=false) {
+  msg.textContent = text;
+  msg.className = ok ? 'ok' : '';
+}
+
+async function refreshAll() {
+  const session = getSession();
+  if (!session) {
+    authBox.classList.remove('hidden');
+    loggedInArea.classList.add('hidden');
+    return;
+  }
+  authBox.classList.add('hidden');
+  loggedInArea.classList.remove('hidden');
+  whoami.innerHTML = `Logged in as <b>${session.username}</b>`;
+  await Promise.all([refreshRequests(), refreshFriends(), refreshLeaderboard()]);
+}
+
+document.getElementById('loginBtn').addEventListener('click', async () => {
+  const u = document.getElementById('userInput').value;
+  const p = document.getElementById('pinInput').value;
+  showMsg('Logging in…');
+  try {
+    await logIn(u, p);
+    showMsg('Welcome back!', true);
+    await refreshAll();
+  } catch (e) { showMsg(e.message); }
+});
+
+document.getElementById('signupBtn').addEventListener('click', async () => {
+  const u = document.getElementById('userInput').value;
+  const p = document.getElementById('pinInput').value;
+  showMsg('Creating account…');
+  try {
+    await signUp(u, p);
+    showMsg('Account created!', true);
+    await refreshAll();
+  } catch (e) { showMsg(e.message); }
+});
+
+document.getElementById('logoutBtn').addEventListener('click', () => {
+  clearSession();
+  refreshAll();
+});
+
+document.getElementById('addFriendBtn').addEventListener('click', async () => {
+  const input = document.getElementById('friendInput');
+  const fmsg = document.getElementById('friendMsg');
+  fmsg.style.color = '#ff9a4d';
+  fmsg.textContent = 'Sending…';
+  try {
+    await sendFriendRequest(input.value);
+    fmsg.style.color = '#5cd97a';
+    fmsg.textContent = 'Request sent!';
+    input.value = '';
+  } catch (e) { fmsg.textContent = e.message; }
+});
+
+async function refreshRequests() {
+  const list = document.getElementById('requestsList');
+  const reqs = await listIncomingRequests();
+  if (!reqs.length) { list.innerHTML = '<div class="empty">No pending requests</div>'; return; }
+  list.innerHTML = '';
+  for (const r of reqs) {
+    const row = document.createElement('div');
+    row.className = 'reqrow';
+    row.innerHTML = `<span>${r.from}</span>`;
+    const btns = document.createElement('div');
+    btns.className = 'reqbtns';
+    const acceptBtn = document.createElement('button');
+    acceptBtn.className = 'accept'; acceptBtn.textContent = 'Accept';
+    acceptBtn.onclick = async () => { await respondToRequest(r.id, true); await refreshAll(); };
+    const rejectBtn = document.createElement('button');
+    rejectBtn.className = 'reject'; rejectBtn.textContent = 'Decline';
+    rejectBtn.onclick = async () => { await respondToRequest(r.id, false); await refreshAll(); };
+    btns.append(acceptBtn, rejectBtn);
+    row.append(btns);
+    list.append(row);
+  }
+}
+
+async function refreshFriends() {
+  const list = document.getElementById('friendsList');
+  const friends = await listFriends();
+  if (!friends.length) { list.innerHTML = '<div class="empty">No friends yet — add someone above</div>'; return; }
+  list.innerHTML = friends.map(f => `<div class="friendItem">${f}</div>`).join('');
+}
+
+let currentGame = 'reflex';
+const GAME_LABELS = { reflex:'pts', tower:'blocks', dash:'pts', dodge:'s', target:'pts', blitz:'pts' };
+
+document.querySelectorAll('#gameTabs button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#gameTabs button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentGame = btn.dataset.game;
+    refreshLeaderboard();
+  });
+});
+
+async function refreshLeaderboard() {
+  const list = document.getElementById('leaderboardList');
+  list.innerHTML = '<div class="empty">Loading…</div>';
+  const rows = await getLeaderboard(currentGame);
+  if (!rows.length) { list.innerHTML = '<div class="empty">No scores yet</div>'; return; }
+  list.innerHTML = '';
+  rows.forEach((r, i) => {
+    const row = document.createElement('div');
+    row.className = 'lbrow' + (r.isMe ? ' me' : '');
+    row.innerHTML = `<span class="rank">#${i+1}</span><span class="name">${r.username}${r.isMe ? ' (you)' : ''}</span><span class="score">${r.score}${GAME_LABELS[currentGame]==='s' ? 's' : ''}</span>`;
+    list.append(row);
+  });
+}
+
+refreshAll();
+</script>
+</body>
+</html>
