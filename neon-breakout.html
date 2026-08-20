@@ -184,17 +184,7 @@ window.addEventListener('touchmove', e => {
   }
 }, { passive: true });
 
-function spawnPowerup(x, y) {
-  if (Math.random() > 0.28) return; // 28% drop rate
-  const types = [
-    { type: 'wide', color: '#00f5d4', label: 'W' },  // Expand Paddle
-    { type: 'life', color: '#ff5a7a', label: '♥' },  // Extra Life
-    { type: 'slow', color: '#4dd6ff', label: 'S' },  // Slow Down Ball
-    { type: 'bonus', color: '#ffd166', label: '+' }  // Bonus Points
-  ];
-  const p = types[Math.floor(Math.random() * types.length)];
-  powerups.push({ x, y, vy: 2, r: 10, ...p });
-}
+
 
 // Neon Power-Up Pool
 function spawnPowerup(x, y) {
