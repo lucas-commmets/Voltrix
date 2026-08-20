@@ -16,12 +16,14 @@
 <meta name="apple-mobile-web-app-title" content="Voltrix">
 <link rel="stylesheet" href="style.css">
 <style>
+  html, body { overflow: auto; height: auto; min-height: 100vh; }
+  body { justify-content: flex-start; padding-top: 24px; padding-bottom: 30px; }
   #grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 14px;
     width: 100%;
-    max-width: 640px;
+    max-width: 760px;
   }
   @media (max-width: 480px) {
     #grid { grid-template-columns: 1fr; }
