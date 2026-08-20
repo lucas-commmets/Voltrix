@@ -6,7 +6,7 @@ import {
   getFirestore, doc, getDoc, setDoc, updateDoc,
   collection, addDoc, query, where, getDocs, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
-import { firebaseConfig } from './firebase-init.js';
+import { firebaseConfig } from './firebase-int.js';
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
@@ -36,7 +36,7 @@ export async function signUp(usernameRaw, pin) {
 
   const ref = doc(db, 'users', username);
   const existing = await getDoc(ref);
-  if (existing.exists()) throw new Error('That username is taken â try another.');
+  if (existing.exists()) throw new Error('That username is taken — try another.');
 
   const pinHash = await sha256(username + ':' + pin);
   await setDoc(ref, {
@@ -61,7 +61,7 @@ export async function logIn(usernameRaw, pin) {
 
 export async function saveScore(game, value) {
   const session = getSession();
-  if (!session) return; // not logged in â local save still handled separately
+  if (!session) return;
   try {
     const ref = doc(db, 'users', session.username);
     const snap = await getDoc(ref);
@@ -69,11 +69,11 @@ export async function saveScore(game, value) {
     const current = snap.data().scores?.[game] ?? 0;
     if (value <= current) return;
     await updateDoc(ref, {
-      pinHash: session.pinHash, // required by security rules to prove it's really you
+      pinHash: session.pinHash,
       [`scores.${game}`]: value
     });
   } catch (e) {
-    // Offline or Firebase not configured yet â fail silently, local score still saved.
+    // Offline or Firebase not configured yet
   }
 }
 
