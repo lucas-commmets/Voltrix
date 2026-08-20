@@ -20,7 +20,7 @@
   </div>
 
   <div id="wrap">
-    <canvas id="game" width="440" height="520"></canvas>
+    <canvas id="game" width="480" height="560"></canvas>
     <div id="overlay">
       <div class="card">
         <h2 id="cardTitle">Ready</h2>
@@ -58,11 +58,16 @@ function tone(freq, dur, type='sine', vol=0.1) {
   } catch(e) {}
 }
 
+let score = 0, best = Number(localStorage.getItem('voltrix_best_blitz')) || 0, lives = 3, phase = 1, state = 'idle';
+
 let _sync = null;
-import('./voltrix-sync.js').then(m => { _sync = m; }).catch(() => {});
+import('./voltrix-sync.js').then(m => { 
+  _sync = m; 
+  if (best > 0) { _sync.saveScore('blitz', best).catch(() => {}); }
+}).catch(() => {});
+
 function syncBest(game, value) { if (_sync) _sync.saveScore(game, value).catch(() => {}); }
 
-let score = 0, best = Number(localStorage.getItem('voltrix_best_blitz')) || 0, lives = 3, phase = 1, state = 'idle';
 let paddle = { w: 84, h: 12, x: (W - 84)/2, y: H - 36, defaultW: 84 };
 let ball = { x: W/2, y: H/2, r: 6, vx: 3, vy: -4, speed: 4.5 };
 let bricks = [], particles = [], powerups = [], shakeT = 0;
@@ -79,7 +84,6 @@ function updateHud() {
 
 function generateBricks() {
   bricks = [];
-  // Phase 1: 4 rows | Phase 2: 5 rows | Phase 3: Maximum 7 rows
   const rows = phase === 3 ? 7 : (3 + phase);
   const cols = 7;
   const bw = (W - 40) / cols;
@@ -88,11 +92,10 @@ function generateBricks() {
 
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      // Phase 3 Pattern Variations: creates randomized empty grid spaces
       if (phase === 3 && (r + c) % 2 === 1 && Math.random() < 0.30) continue;
 
       const color = COLORS[r % COLORS.length];
-      const hp = (phase === 3 && r === 0) ? 2 : 1; // Top row takes 2 hits on Phase 3
+      const hp = (phase === 3 && r === 0) ? 2 : 1;
       bricks.push({
         x: 20 + c * bw,
         y: startY + r * (bh + 6),
@@ -108,7 +111,6 @@ function generateBricks() {
 }
 
 function updateBallSpeed() {
-  // Base speed grows with phase AND continuous score progression
   ball.speed = 4.5 + (phase * 0.3) + (score * 0.0025);
   const angle = Math.atan2(ball.vy, ball.vx);
   ball.vx = Math.cos(angle) * ball.speed;
@@ -137,18 +139,37 @@ function resetGame() {
   updateHud();
 }
 
-if (phase >= 3) {
-  state = 'win';
-  if (score > best) { 
-    best = score; 
-    localStorage.setItem('voltrix_best_blitz', best); 
+function advancePhase() {
+  if (phase >= 3) {
+    state = 'win';
+    if (score > best) { 
+      best = score; 
+      localStorage.setItem('voltrix_best_blitz', best); 
+    }
+    syncBest('blitz', score);
+    updateHud();
+
+    tone(600, 0.12, 'triangle', 0.1);
+    tone(800, 0.12, 'triangle', 0.1);
+    tone(1200, 0.3, 'triangle', 0.12);
+
+    cardTitle.textContent = 'VICTORY!';
+    document.querySelector('.card p').innerHTML = `All 3 Phases Cleared!<br>Final Score: <b style="color:#00f5d4">${score}</b>`;
+    goBtn.textContent = 'Play Again';
+    overlay.classList.remove('hidden');
+    return;
   }
-  syncBest('blitz', score); // Sync the game score directly
-  updateHud();
-  // ... rest of victory code
+
+  phase++;
+  tone(880, 0.2, 'triangle', 0.12);
+  tone(1100, 0.25, 'triangle', 0.12);
+  powerups = [];
+  generateBricks();
+  resetBall();
 }
 
 function startGame() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   resetGame();
   state = 'play';
   overlay.classList.add('hidden');
@@ -172,28 +193,27 @@ document.addEventListener('keydown', e => {
   keys[k] = true;
 });
 document.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
 function updatePaddleFromKeys(dt) {
   if (state !== 'play') return;
   if (keys['arrowleft']) paddle.x -= PADDLE_KEY_SPEED * dt;
   if (keys['arrowright']) paddle.x += PADDLE_KEY_SPEED * dt;
   paddle.x = Math.max(0, Math.min(W - paddle.w, paddle.x));
 }
+
 window.addEventListener('touchmove', e => {
   if (state === 'play' && e.touches[0]) {
     setPaddlePos(e.touches[0].clientX);
   }
 }, { passive: true });
 
-
-
-// Neon Power-Up Pool
 function spawnPowerup(x, y) {
-  if (Math.random() > 0.30) return; // 30% drop chance
+  if (Math.random() > 0.30) return;
   const types = [
-    { type: 'wide', color: '#00f5d4', label: '⚡', name: 'NEON BEAM' },   // Cyan Glow - Paddle Expand
-    { type: 'life', color: '#ff007f', label: '♥', name: 'CYBER HEART' }, // Hot Pink Glow - Extra Life
-    { type: 'slow', color: '#00d2ff', label: '❄', name: 'ZERO FREQ' },   // Electric Blue Glow - Slow Ball
-    { type: 'bonus', color: '#ffe600', label: '★', name: 'OVERCHARGE' }  // Neon Yellow Glow - Score Boost
+    { type: 'wide', color: '#00f5d4', label: '⚡', name: 'NEON BEAM' },
+    { type: 'life', color: '#ff007f', label: '♥', name: 'CYBER HEART' },
+    { type: 'slow', color: '#00d2ff', label: '❄', name: 'ZERO FREQ' },
+    { type: 'bonus', color: '#ffe600', label: '★', name: 'OVERCHARGE' }
   ];
   const p = types[Math.floor(Math.random() * types.length)];
   powerups.push({ x, y, vy: 2.2, r: 11, pulse: 0, ...p });
@@ -235,31 +255,27 @@ function update() {
 
   updatePaddleFromKeys(1/60);
 
-  // Ball Movement
   ball.x += ball.vx;
   ball.y += ball.vy;
 
-  // Wall Collisions
   if (ball.x - ball.r < 0) { ball.x = ball.r; ball.vx *= -1; tone(300, 0.04); }
   if (ball.x + ball.r > W) { ball.x = W - ball.r; ball.vx *= -1; tone(300, 0.04); }
   if (ball.y - ball.r < 0) { ball.y = ball.r; ball.vy *= -1; tone(300, 0.04); }
 
-  // Bottom Boundary (Life Lost)
   if (ball.y + ball.r > H) {
     lives--;
     shakeT = 10;
     tone(180, 0.2, 'sawtooth', 0.1);
     updateHud();
     if (lives <= 0) {
-  state = 'over';
-  if (score > best) { 
-    best = score; 
-    localStorage.setItem('voltrix_best_blitz', best); 
-  }
-  syncBest('blitz', score); // Sync the game score directly
-  updateHud();
-  // ... rest of game over code
-}
+      state = 'over';
+      if (score > best) { 
+        best = score; 
+        localStorage.setItem('voltrix_best_blitz', best); 
+      }
+      syncBest('blitz', score);
+      updateHud();
+
       cardTitle.textContent = 'Game Over';
       document.querySelector('.card p').innerHTML = `Phase Reached: <b>${phase}</b><br>Score: <b style="color:#4dd6ff">${score}</b>`;
       goBtn.textContent = 'Try Again';
@@ -269,7 +285,6 @@ function update() {
     }
   }
 
-  // Paddle Collision
   if (ball.vy > 0 &&
       ball.x > paddle.x && ball.x < paddle.x + paddle.w &&
       ball.y + ball.r >= paddle.y && ball.y - ball.r <= paddle.y + paddle.h) {
@@ -281,7 +296,6 @@ function update() {
     tone(440, 0.05, 'square', 0.08);
   }
 
-  // Brick Collisions
   let activeBricks = 0;
   for (const b of bricks) {
     if (!b.active) continue;
@@ -292,7 +306,7 @@ function update() {
       
       b.hp--;
       score += 10 * phase;
-      updateBallSpeed(); // Accelerates speed as score grows
+      updateBallSpeed();
       updateHud();
       createSparks(ball.x, ball.y, b.color);
 
@@ -309,7 +323,6 @@ function update() {
     }
   }
 
-  // Powerups Movement & Collection
   for (const p of powerups) {
     p.y += p.vy;
     if (p.y + p.r >= paddle.y && p.y - p.r <= paddle.y + paddle.h &&
@@ -320,10 +333,8 @@ function update() {
   }
   powerups = powerups.filter(p => !p.collected && p.y - p.r < H);
 
-  // Phase Clear Check
   if (activeBricks === 0) advancePhase();
 
-  // Particles
   for (const p of particles) {
     p.x += p.vx; p.y += p.vy; p.life--;
   }
@@ -336,20 +347,17 @@ function draw() {
   ctx.save();
   if (shakeT > 0.3) ctx.translate((Math.random() - 0.5) * shakeT, (Math.random() - 0.5) * shakeT);
 
-  // Background Grid
   ctx.fillStyle = '#0a0c14';
   ctx.fillRect(0, 0, W, H);
   ctx.strokeStyle = 'rgba(255,255,255,0.03)';
   for (let x = 0; x < W; x += 32) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
   for (let y = 0; y < H; y += 32) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
 
-  // Phase & Speed Tags
   ctx.fillStyle = 'rgba(77, 214, 255, 0.4)';
   ctx.font = '600 11px sans-serif';
   ctx.fillText(`PHASE ${phase}`, 20, 28);
   ctx.fillText(`SPEED ${ball.speed.toFixed(1)}x`, W - 85, 28);
 
-  // Bricks
   for (const b of bricks) {
     if (!b.active) continue;
     ctx.fillStyle = b.hp < b.maxHp ? '#ffffff' : b.color;
@@ -359,14 +367,11 @@ function draw() {
   }
   ctx.shadowBlur = 0;
 
-  // Powerups
-// Neon Power-Ups Rendering
   for (const p of powerups) {
     p.pulse += 0.1;
     const glowRadius = p.r + Math.sin(p.pulse) * 2;
 
     ctx.save();
-    // Outer Neon Halo Ring
     ctx.strokeStyle = p.color;
     ctx.shadowColor = p.color;
     ctx.shadowBlur = 16;
@@ -375,13 +380,11 @@ function draw() {
     ctx.arc(p.x, p.y, glowRadius, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Dark Core Fill
     ctx.fillStyle = 'rgba(10, 12, 20, 0.9)';
     ctx.beginPath();
     ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
     ctx.fill();
 
-    // Neon Symbol Center
     ctx.fillStyle = p.color;
     ctx.font = 'bold 12px sans-serif';
     ctx.textAlign = 'center';
@@ -391,13 +394,11 @@ function draw() {
   }
   ctx.shadowBlur = 0;
 
-  // Paddle
   ctx.fillStyle = '#4dd6ff';
   ctx.shadowColor = '#4dd6ff';
   ctx.shadowBlur = 10;
   ctx.fillRect(paddle.x, paddle.y, paddle.w, paddle.h);
 
-  // Ball
   ctx.fillStyle = '#ffffff';
   ctx.shadowColor = '#ffffff';
   ctx.shadowBlur = 12;
@@ -406,7 +407,6 @@ function draw() {
   ctx.fill();
   ctx.shadowBlur = 0;
 
-  // Particles
   for (const p of particles) {
     ctx.globalAlpha = Math.max(0, p.life / 18);
     ctx.fillStyle = p.color;
