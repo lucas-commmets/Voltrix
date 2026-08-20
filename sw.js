@@ -1,4 +1,4 @@
-const CACHE_NAME = 'neon-arcade-v11';
+const CACHE_NAME = 'neon-arcade-v12'; 
 const ASSETS = [
   './index.html',
   './style.css',
